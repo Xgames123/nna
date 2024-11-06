@@ -1,5 +1,4 @@
-use asm::AsmError;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use std::{
     fs,
     io::{self, Read},
@@ -7,11 +6,7 @@ use std::{
     process,
 };
 use stderrlog::LogLevelNum;
-
-//use crate::{emiting::*, util::count_nonzero_banks};
 mod asm;
-//mod emiting;
-mod util;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -25,10 +20,6 @@ struct Cli {
     #[arg(short = 'o', long, default_value = "out.bin")]
     output: String,
 
-    /// The format of the output
-    #[arg(short = 'f', long, default_value = "auto")]
-    format: Format,
-
     /// Prints the amount of space the program uses
     #[arg(short = 'm', long)]
     memory_usage: bool,
@@ -38,16 +29,9 @@ struct Cli {
     log_level: usize,
 }
 
-#[derive(Debug, Clone, ValueEnum, PartialEq, Eq)]
-#[value()]
-enum Format {
-    ///Choose format based on file extension
-    Auto,
-    Hex,
-    Bin,
-}
 fn get_input_data(path: &str) -> io::Result<(Box<str>, String)> {
     if path == "-" {
+        println!("Reading program from stdin...");
         let mut str = String::new();
         let mut stdin = io::stdin();
         stdin.read_to_string(&mut str)?;
@@ -68,7 +52,7 @@ fn get_input_data(path: &str) -> io::Result<(Box<str>, String)> {
 macro_rules! die {
     ($($arg:tt)*) => {
         eprintln!($($arg)*);
-        process::exit(-1);
+        process::exit(1);
     };
 }
 
@@ -87,32 +71,22 @@ fn main() {
         die!("Failed to read '{}'\n{}", cli.input, err);
     });
 
-    let err = AsmError {
-        filename: filename.into(),
-        file: &input_data,
-        location: (10, 2..4),
-        message: "test error".into(),
+    let unpacked = match asm::assemble(filename.into(), &input_data) {
+        Ok(out) => out,
+        Err(err) => {
+            err.print();
+            process::exit(1);
+        }
     };
-    err.print();
-    // let out = match asm::assemble(input_data) {
-    //     Ok(out) => out,
-    //     Err(err) => {
-    //         die(&err.to_string());
-    //         return;
-    //     }
-    // };
-    //
-    // let content = emit(
-    //     cli.format,
-    //     output_file.extension().map(|ext| ext.to_str()).flatten(),
-    //     out,
-    // );
-    //
-    // fs::write(cli.output, content).unwrap_or_else(|err| {
-    //     die(&format!("Failed to write output file\n\n {}", err));
-    // });
-    //
-    // if cli.memory_usage {
-    //     println!("Using {}/16 banks", count_nonzero_banks(&out));
-    // }
+
+    if cli.memory_usage {
+        println!(
+            "Using {}/16 banks",
+            asm::codegen::count_nonzero_banks(&unpacked)
+        );
+    }
+    let packed = asm::codegen::pack(unpacked);
+    fs::write(output_file, packed).unwrap_or_else(|err| {
+        die!("Failed to write output file\n\n {}", err);
+    });
 }

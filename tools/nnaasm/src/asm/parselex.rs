@@ -1,10 +1,7 @@
 use std::borrow::Cow;
-use std::cell::RefCell;
-use std::ops::Range;
-use std::rc::Rc;
 
 use super::codeparser::CodeParser;
-use super::{AsmError, Located, Location};
+use super::{IntoAsmError, Located, Location};
 use libnna::OpCode;
 use libnna::{u2, u4, ArgOpTy};
 
@@ -53,8 +50,18 @@ impl LexError {
         )
     }
 }
+impl IntoAsmError for Located<LexError> {
+    fn into_asm_error<'a>(self, code: &'a str, filename: std::rc::Rc<str>) -> super::AsmError<'a> {
+        super::AsmError {
+            filename,
+            code,
+            location: self.location,
+            message: self.value.message.to_string(),
+        }
+    }
+}
 
-pub fn parse_hex4<'a>(str: &'a str) -> Option<u4> {
+fn parse_hex4<'a>(str: &'a str) -> Option<u4> {
     let str = str.to_lowercase();
     if str.len() != 1 {
         return None;
@@ -64,7 +71,7 @@ pub fn parse_hex4<'a>(str: &'a str) -> Option<u4> {
     }
     return None;
 }
-pub fn parse_hex8<'a>(str: &'a str) -> Option<u8> {
+fn parse_hex8<'a>(str: &'a str) -> Option<u8> {
     let str = str.to_lowercase();
     if str.len() != 2 {
         return None;
@@ -72,7 +79,7 @@ pub fn parse_hex8<'a>(str: &'a str) -> Option<u8> {
 
     u8::from_str_radix(&str, 16).ok()
 }
-pub fn parse_identifier(str: &str) -> Option<Box<str>> {
+fn parse_identifier(str: &str) -> Option<Box<str>> {
     for char in str.chars() {
         if !char.is_alphabetic() && char != '_' {
             return None;
@@ -81,7 +88,7 @@ pub fn parse_identifier(str: &str) -> Option<Box<str>> {
     Some(str[1..].into())
 }
 
-pub fn parse_hex2(str: &str) -> Option<u2> {
+fn parse_hex2(str: &str) -> Option<u2> {
     if str.len() != 1 {
         return None;
     }
@@ -94,7 +101,7 @@ pub fn parse_hex2(str: &str) -> Option<u2> {
     }
 }
 
-pub fn parse_value4(
+fn parse_value4(
     token: &str,
     location: Location,
 ) -> std::result::Result<Option<Located<ValueToken4>>, Located<LexError>> {
@@ -117,7 +124,7 @@ pub fn parse_value4(
     Ok(None)
 }
 
-pub fn parse_next_hex8(parser: &mut CodeParser) -> Result<u8> {
+fn parse_next_hex8(parser: &mut CodeParser) -> Result<u8> {
     let token = parser.next_same_line_or_err(Cow::Borrowed(
         "Expected an 8 bit constant value after this.",
     ))?;
@@ -129,7 +136,7 @@ pub fn parse_next_hex8(parser: &mut CodeParser) -> Result<u8> {
     Ok(Located::new(value, parser.location()))
 }
 
-pub fn parse_next_value4(parser: &mut CodeParser) -> Result<ValueToken4> {
+fn parse_next_value4(parser: &mut CodeParser) -> Result<ValueToken4> {
     let token =
         parser.next_same_line_or_err(Cow::Borrowed("Expected a 4 bit value after this."))?;
     match parse_value4(token, parser.location())? {
@@ -140,7 +147,7 @@ pub fn parse_next_value4(parser: &mut CodeParser) -> Result<ValueToken4> {
         )),
     }
 }
-pub fn parse_next_value2(parser: &mut CodeParser) -> Result<u2> {
+fn parse_next_value2(parser: &mut CodeParser) -> Result<u2> {
     let token =
         parser.next_same_line_or_err(Cow::Borrowed("Expected a 2 bit value after this."))?;
     let value = parse_hex2(token).ok_or(LexError::static_located(
@@ -149,7 +156,7 @@ pub fn parse_next_value2(parser: &mut CodeParser) -> Result<u2> {
     ))?;
     Ok(Located::new(value, parser.location()))
 }
-pub fn parse_next_reg(parser: &mut CodeParser) -> Result<u2> {
+fn parse_next_reg(parser: &mut CodeParser) -> Result<u2> {
     let token = parser.next_same_line_or_err(Cow::Borrowed("Expected a register after this."))?;
     match token {
         "r0" => Ok(Located::new(u2::ZERO, parser.location())),
@@ -183,19 +190,19 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut CodeParser) -> Resu
 
 fn parse_op<'a>(token: &'a str, parser: &mut CodeParser) -> Result<OpToken> {
     let op = OpCode::try_from_str(token).ok_or(LexError::static_located(
-        "Unknown operation",
+        "Unknown operation. See spec for availible operations",
         parser.location(),
     ))?;
     Ok(match op.arg_types() {
         ArgOpTy::None() => Located::new(OpToken::Full(op.opcode()), parser.location()),
-        ArgOpTy::Bit2(arg_name) => {
+        ArgOpTy::Bit2(_arg_name) => {
             let value = parse_next_value2(parser)?;
             Located::new(
                 OpToken::Full(op.opcode() | value.value.into_low()),
                 parser.location().combine(value.location),
             )
         }
-        ArgOpTy::Bit4(arg_name) => {
+        ArgOpTy::Bit4(_arg_name) => {
             let value = parse_next_value4(parser)?;
             let token = match value.value {
                 ValueToken4::Const(value) => OpToken::Full(op.opcode() | value.into_low()),
@@ -203,7 +210,7 @@ fn parse_op<'a>(token: &'a str, parser: &mut CodeParser) -> Result<OpToken> {
             };
             Located::new(token, parser.location().combine(value.location))
         }
-        ArgOpTy::OneReg(arg_name) => {
+        ArgOpTy::OneReg(_arg_name) => {
             let register = parse_next_reg(parser)?;
 
             Located::new(
@@ -211,7 +218,7 @@ fn parse_op<'a>(token: &'a str, parser: &mut CodeParser) -> Result<OpToken> {
                 parser.location().combine(register.location),
             )
         }
-        ArgOpTy::TowReg(arg0_name, arg1_name) => {
+        ArgOpTy::TowReg(_arg0_name, _arg1_name) => {
             let register0 = parse_next_reg(parser)?;
             let register1 = parse_next_reg(parser)?;
 
@@ -261,101 +268,4 @@ pub fn parse_lex(input: &str) -> std::result::Result<Vec<Located<Token>>, Locate
 
         out_vec.push(parse_op(token, &mut parser)?.map(|opt| Token::Op(opt)));
     }
-
-    // for (linenum, line) in input.lines().enumerate() {
-    //     let linenum = linenum + 1;
-    //
-    //     // strip comments
-    //     if let Some(pos) = line.find('#') {
-    //         line = &line[..pos];
-    //     }
-    //     if let Some(pos) = line.find(';') {
-    //         line = &line[..pos];
-    //     }
-    //
-    //     let mut iter = line.split_whitespace();
-    //     loop{
-    //         let Some(token) = iter.next() else {break;};
-    //         if token == ".org" {
-    //             let token = iter.next().ok_or(AsmError{
-    //                 linenum: linenum,
-    //             })?;
-    //             push_tok!(
-    //                 Token::Org(parse_hex8(&token).ok_or_else(|| AsmError {
-    //                     linenum: Some(linenum),
-    //                     code_snip: token.into(),
-    //                     message: "Failed to parse hex digit".into(),
-    //                     stage: Stage::Parse,
-    //                 })?)
-    //             );
-    //             continue;
-    //         }
-    //
-    //     }
-    //
-    //     for token in line.split_whitespace() {
-    //         if org {
-    //             continue;
-    //         }
-    //
-    //         if token.ends_with(":") {
-    //             push_tok!(Token::LabelDef(token[..token.len() - 1].into()), linenum);
-    //             continue;
-    //         }
-    //
-    //         if token.starts_with("&&") {
-    //             push_tok!(
-    //                 Token::LabelRef {
-    //                     name: token[2..].into(),
-    //                     wide: true
-    //                 },
-    //                 linenum
-    //             );
-    //             continue;
-    //         }
-    //         if token.starts_with("&") {
-    //             push_tok!(
-    //                 Token::LabelRef {
-    //                     name: token[1..].into(),
-    //                     wide: false
-    //                 },
-    //                 linenum
-    //             );
-    //             continue;
-    //         }
-    //         if token.starts_with("0x") {
-    //             push_tok!(
-    //                 Token::Const(parse_hex4(&token[2..]).ok_or_else(|| AsmError {
-    //                     linenum: Some(linenum),
-    //                     code_snip: token.into(),
-    //                     message: "Failed to parse hex digit".into(),
-    //                     stage: Stage::Parse,
-    //                 })?),
-    //                 linenum
-    //             );
-    //             continue;
-    //         }
-    //
-    //         match Op::try_from_str(&token) {
-    //             Some(op) => {
-    //                 push_tok!(Token::Const(u4::from_low(op.opcode())), linenum);
-    //
-    //                 let arg = op.arg_types().0;
-    //                 match arg {
-    //                     ArgTy::Any(),
-    //                     ArgTy::Reg(),
-    //                     ArgTy::None(),
-    //                 }
-    //             }
-    //             None => {
-    //                 return Err(AsmError {
-    //                     linenum: Some(linenum),
-    //                     code_snip: token.into(),
-    //                     message: "Invalid operation".into(),
-    //                     stage: Stage::Parse,
-    //                 })
-    //             }
-    //         }
-    //     }
-    // }
 }

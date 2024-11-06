@@ -52,15 +52,20 @@ impl<'a> CodeParser<'a> {
         &mut self,
         message: Cow<'static, str>,
     ) -> Result<&'a str, Located<super::parselex::LexError>> {
-        self.next()
-            .ok_or(super::parselex::LexError.located(message, self.last_location.clone()))
+        self.next().ok_or(super::parselex::LexError::located(
+            message,
+            self.last_location.clone(),
+        ))
     }
     pub fn next_same_line_or_err(
         &mut self,
         message: Cow<'static, str>,
     ) -> Result<&'a str, Located<super::parselex::LexError>> {
         self.next_same_line()
-            .ok_or(super::parselex::LexError.located(message, self.last_location.clone()))
+            .ok_or(super::parselex::LexError::located(
+                message,
+                self.last_location.clone(),
+            ))
     }
 
     pub fn next_same_line(&mut self) -> Option<&'a str> {
