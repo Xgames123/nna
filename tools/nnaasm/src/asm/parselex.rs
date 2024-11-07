@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use super::codeparser::CodeParser;
+use super::tokenizer::Tokenizer;
 use super::{IntoAsmError, Located, Location};
 use libnna::OpCode;
 use libnna::{u2, u4, ArgOpTy};
@@ -132,7 +132,7 @@ fn parse_value4(
     Ok(None)
 }
 
-fn parse_next_hex8(parser: &mut CodeParser) -> Result<u8> {
+fn parse_next_hex8(parser: &mut Tokenizer) -> Result<u8> {
     let token = parser.next_same_line_or_err(Cow::Borrowed(
         "Expected an 8 bit constant value after this.",
     ))?;
@@ -144,7 +144,7 @@ fn parse_next_hex8(parser: &mut CodeParser) -> Result<u8> {
     Ok(Located::new(value, parser.location()))
 }
 
-fn parse_next_value4(parser: &mut CodeParser) -> Result<ValueToken4> {
+fn parse_next_value4(parser: &mut Tokenizer) -> Result<ValueToken4> {
     let token =
         parser.next_same_line_or_err(Cow::Borrowed("Expected a 4 bit value after this."))?;
     match parse_value4(token, parser.location())? {
@@ -155,7 +155,7 @@ fn parse_next_value4(parser: &mut CodeParser) -> Result<ValueToken4> {
         )),
     }
 }
-fn parse_next_value2(parser: &mut CodeParser) -> Result<u2> {
+fn parse_next_value2(parser: &mut Tokenizer) -> Result<u2> {
     let token =
         parser.next_same_line_or_err(Cow::Borrowed("Expected a 2 bit value after this."))?;
     let value = parse_hex2(token).ok_or(LexError::static_located(
@@ -164,7 +164,7 @@ fn parse_next_value2(parser: &mut CodeParser) -> Result<u2> {
     ))?;
     Ok(Located::new(value, parser.location()))
 }
-fn parse_next_reg(parser: &mut CodeParser) -> Result<u2> {
+fn parse_next_reg(parser: &mut Tokenizer) -> Result<u2> {
     let token = parser.next_same_line_or_err(Cow::Borrowed("Expected a register after this."))?;
     match token {
         "r0" => Ok(Located::new(u2::ZERO, parser.location())),
@@ -178,7 +178,7 @@ fn parse_next_reg(parser: &mut CodeParser) -> Result<u2> {
     }
 }
 
-fn parse_compiler_directive<'a>(token: &'a str, parser: &mut CodeParser) -> Result<Token> {
+fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<Token> {
     match token {
         "org" => {
             let addr = parse_next_hex8(parser)?;
@@ -196,7 +196,7 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut CodeParser) -> Resu
     }
 }
 
-fn parse_op<'a>(token: &'a str, parser: &mut CodeParser) -> Result<OpToken> {
+fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
     let op = OpCode::try_from_str(token).ok_or(LexError::static_located(
         "Unknown operation. See spec for availible operations",
         parser.location(),
@@ -245,7 +245,7 @@ fn parse_op<'a>(token: &'a str, parser: &mut CodeParser) -> Result<OpToken> {
 
 pub fn parse_lex(input: &str) -> std::result::Result<Vec<Located<Token>>, Located<LexError>> {
     let mut out_vec = Vec::new();
-    let Some(mut parser) = CodeParser::new(input) else {
+    let Some(mut parser) = Tokenizer::new(input) else {
         return Ok(out_vec);
     };
 

@@ -8,19 +8,19 @@ use libnna::u4;
 use self::parselex::parse_lex;
 
 pub mod codegen;
-mod codeparser;
 mod parselex;
+mod tokenizer;
 
 const COLOR_RED: &'static str = "\x1b[31m";
 const BOLD: &'static str = "\x1b[1m";
 const RESET: &'static str = "\x1b[0m";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Location(usize, Range<usize>);
 impl From<(usize, Range<usize>)> for Location {
     fn from(value: (usize, Range<usize>)) -> Self {
         if value.1.end < value.1.start {
-            panic!("Starting value can't be grater than ending value. In a span")
+            panic!("Starting value can't be greater than ending value. In a span")
         }
         Self(value.0, value.1)
     }

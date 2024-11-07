@@ -191,8 +191,8 @@ pub fn gen_unpacked(tt: Vec<Located<Token>>) -> Result<[u4; 256], Located<CodeGe
 pub fn pack(data: [u4; 256]) -> [u8; 128] {
     let mut output = [0u8; 128];
     for (i, nibpair) in data.chunks(2).into_iter().enumerate() {
-        let low = nibpair[0].into_low();
-        let high = nibpair[1].into_high();
+        let high = nibpair[0].into_high(); // high is <<
+        let low = nibpair[1].into_low(); // low is >>
 
         output[i] = low | high;
     }
