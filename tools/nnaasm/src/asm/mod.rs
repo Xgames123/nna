@@ -19,6 +19,9 @@ const RESET: &'static str = "\x1b[0m";
 pub struct Location(usize, Range<usize>);
 impl From<(usize, Range<usize>)> for Location {
     fn from(value: (usize, Range<usize>)) -> Self {
+        if value.1.end < value.1.start {
+            panic!("Starting value can't be grater than ending value. In a span")
+        }
         Self(value.0, value.1)
     }
 }

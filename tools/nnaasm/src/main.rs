@@ -87,6 +87,6 @@ fn main() {
     }
     let packed = asm::codegen::pack(unpacked);
     fs::write(output_file, packed).unwrap_or_else(|err| {
-        die!("Failed to write output file\n\n {}", err);
+        die!("Failed to write output file:\n{}", err);
     });
 }

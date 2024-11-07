@@ -25,6 +25,14 @@ pub enum Token {
     Value(ValueToken4),
     Op(OpToken),
 }
+impl Token {
+    pub fn is_org(&self) -> bool {
+        match self {
+            Self::Org(_) => true,
+            _ => false,
+        }
+    }
+}
 
 pub struct LexError {
     message: Cow<'static, str>,
@@ -245,6 +253,7 @@ pub fn parse_lex(input: &str) -> std::result::Result<Vec<Located<Token>>, Locate
         let Some(token) = parser.next() else {
             return Ok(out_vec);
         };
+        //println!("token: '{}'", token);
         if token.starts_with('.') {
             out_vec.push(parse_compiler_directive(&token[1..], &mut parser)?);
             continue;

@@ -16,7 +16,7 @@ impl IntoAsmError for Located<CodeGenError> {
     fn into_asm_error<'a>(self, code: &'a str, filename: Rc<str>) -> super::AsmError<'a> {
         let message = match self.value {
             CodeGenError::NoOrg() => {
-                "At least 1 .org statement is required for a valid program.".to_string()
+                "Everything needs to be defined inside an .org statement. Else the assembler can't know where to put it in the final output binary".to_string()
             }
             CodeGenError::LabelNotDefined(name) => format!("label '{}' is not defined", name),
             CodeGenError::OrgOverlap(org0, org1) => {
@@ -142,6 +142,9 @@ pub fn gen_unpacked(tt: Vec<Located<Token>>) -> Result<[u4; 256], Located<CodeGe
     let mut cur_org_loc = None;
 
     for token in tt {
+        if !token.value.is_org() && cur_org_loc.is_none() {
+            return Err(Located::new(CodeGenError::NoOrg(), token.location));
+        }
         match token.value {
             Token::Op(OpToken::Full(byte)) => {
                 data.push(u4::from_low(byte));

@@ -4,8 +4,9 @@ use super::{Located, Location};
 
 pub struct CodeParser<'a> {
     cur_linenum: usize,
-    code: &'a str,
     cur_index: usize,
+    code: &'a str,
+    cur_col: usize,
     char_iter: std::str::CharIndices<'a>,
     last_location: Location,
 }
@@ -16,6 +17,7 @@ impl<'a> CodeParser<'a> {
             code,
             cur_linenum: 0,
             cur_index: 0,
+            cur_col: 0,
             char_iter: code.char_indices(),
         })
     }
@@ -35,27 +37,25 @@ impl<'a> CodeParser<'a> {
     }
     pub fn next_char(&mut self) -> Option<(usize, char)> {
         let (index, char) = self.char_iter.next()?;
-        self.cur_index += 1;
+        let size = index - self.cur_index;
+        self.cur_index = index;
+        self.cur_col += size;
         if char == '\n' {
             self.cur_linenum += 1;
-            self.cur_index = 0;
+            self.cur_col = 0;
+        }
+        if char == ';' {
+            self.skip_line();
+            return self.next_char();
         }
         Some((index, char))
     }
+
     pub fn code(&self) -> &'a str {
         self.code
     }
     pub fn location(&self) -> Location {
         self.last_location.clone()
-    }
-    pub fn next_or_err(
-        &mut self,
-        message: Cow<'static, str>,
-    ) -> Result<&'a str, Located<super::parselex::LexError>> {
-        self.next().ok_or(super::parselex::LexError::located(
-            message,
-            self.last_location.clone(),
-        ))
     }
     pub fn next_same_line_or_err(
         &mut self,
@@ -69,21 +69,25 @@ impl<'a> CodeParser<'a> {
     }
 
     pub fn next_same_line(&mut self) -> Option<&'a str> {
-        let start_index = loop {
+        let (start_index, start_col) = loop {
             let (index, char) = self.next_char()?;
             if char == '\n' {
                 return None;
             }
             if !char.is_whitespace() {
-                break index;
+                break (index, self.cur_col);
             }
         };
-        let range_start = self.cur_index;
+        return self.to_end_of_token(start_index, start_col);
+    }
+
+    fn to_end_of_token(&mut self, start_index: usize, start_col: usize) -> Option<&'a str> {
         loop {
+            let col = self.cur_col;
+            let linenum = self.cur_linenum;
             let (index, char) = self.next_char()?;
             if char.is_whitespace() {
-                let loc: Location = (self.cur_linenum, range_start..self.cur_index).into();
-                self.last_location = loc.clone();
+                self.last_location = (linenum, start_col..col + 1).into();
                 return Some(&self.code[start_index..index]);
             }
         }
@@ -92,12 +96,13 @@ impl<'a> CodeParser<'a> {
 impl<'a> Iterator for CodeParser<'a> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let (_, char) = self.next_char()?;
+        let (start_index, start_col) = loop {
+            let prev_col = self.cur_col;
+            let (index, char) = self.next_char()?;
             if !char.is_whitespace() {
-                break;
+                break (index, prev_col);
             }
-        }
-        self.next_same_line()
+        };
+        self.to_end_of_token(start_index, start_col)
     }
 }
