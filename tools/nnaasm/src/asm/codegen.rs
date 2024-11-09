@@ -10,11 +10,15 @@ use super::{
 pub enum CodeGenError {
     NoOrg(),
     OrgOverlap(Org, Org),
+    UnalignedOp(),
     LabelNotDefined(Box<str>),
 }
 impl IntoAsmError for Located<CodeGenError> {
     fn into_asm_error<'a>(self, code: &'a str, filename: Rc<str>) -> super::AsmError<'a> {
         let message = match self.value {
+            CodeGenError::UnalignedOp() => {
+                "Operation is not 2 bit aligned.".to_string()
+            }
             CodeGenError::NoOrg() => {
                 "Everything needs to be defined inside an .org statement. Else the assembler can't know where to put it in the final output binary".to_string()
             }
@@ -131,26 +135,39 @@ fn resolve_labels(
 
     Ok(())
 }
+
 pub fn gen_unpacked(tt: Vec<Located<Token>>) -> Result<[u4; 256], Located<CodeGenError>> {
     let mut bin = [u4::ZERO; 256];
     let mut label_refs = Vec::new();
     let mut orgs = Vec::new();
     let mut labels = HashMap::new();
 
-    let mut data = Vec::new();
-    let mut cur_org_addr = 0;
-    let mut cur_org_loc = None;
+    let mut tt_iter = tt.into_iter();
+    let (mut cur_org_addr, mut cur_org_loc) = match tt_iter.next() {
+        Some(token) => match token.value {
+            Token::Org(addr) => (addr, token.location),
+            _ => {
+                return Err(Located::new(CodeGenError::NoOrg(), token.location));
+            }
+        },
+        None => return Ok(bin),
+    };
 
-    for token in tt {
-        if !token.value.is_org() && cur_org_loc.is_none() {
-            return Err(Located::new(CodeGenError::NoOrg(), token.location));
-        }
+    let mut data = Vec::new();
+
+    for token in tt_iter {
         match token.value {
             Token::Op(OpToken::Full(byte)) => {
+                if (cur_org_addr as usize + data.len()) % 2 != 0 {
+                    return Err(Located::new(CodeGenError::UnalignedOp(), token.location));
+                }
                 data.push(u4::from_low(byte));
                 data.push(u4::from_high(byte));
             }
             Token::Op(OpToken::LabelRef(instruct, label_ref)) => {
+                if (cur_org_addr as usize + data.len()) % 2 != 0 {
+                    return Err(Located::new(CodeGenError::UnalignedOp(), token.location));
+                }
                 data.push(instruct);
                 label_refs.push(Located::new(
                     (label_ref, cur_org_addr + data.len() as u8),
@@ -170,18 +187,15 @@ pub fn gen_unpacked(tt: Vec<Located<Token>>) -> Result<[u4; 256], Located<CodeGe
                 labels.insert(name, cur_org_addr + data.len() as u8);
             }
             Token::Org(addr) => {
-                if let Some(cur_org_loc) = cur_org_loc {
-                    let org = Org::write(cur_org_addr, cur_org_loc, &data, &mut bin, &orgs)?;
-                    orgs.push(org);
-                }
+                let org = Org::write(cur_org_addr, cur_org_loc, &data, &mut bin, &orgs)?;
+                orgs.push(org);
                 data.clear();
-                cur_org_loc = Some(token.location);
+                cur_org_loc = token.location;
                 cur_org_addr = addr;
             }
         }
     }
     //write last org
-    let cur_org_loc = cur_org_loc.ok_or(Located::new(CodeGenError::NoOrg(), (0, 0..0).into()))?;
     Org::write(cur_org_addr, cur_org_loc, &data, &mut bin, &orgs)?;
 
     resolve_labels(&mut bin, labels, label_refs)?;

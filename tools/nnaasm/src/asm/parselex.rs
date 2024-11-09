@@ -201,13 +201,14 @@ fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
         "Unknown operation. See spec for availible operations",
         parser.location(),
     ))?;
+    let loc = parser.location();
     Ok(match op.arg_types() {
-        ArgOpTy::None() => Located::new(OpToken::Full(op.opcode()), parser.location()),
+        ArgOpTy::None() => Located::new(OpToken::Full(op.opcode()), loc),
         ArgOpTy::Bit2(_arg_name) => {
             let value = parse_next_value2(parser)?;
             Located::new(
                 OpToken::Full(op.opcode() | value.value.into_low()),
-                parser.location().combine(value.location),
+                loc.combine(value.location),
             )
         }
         ArgOpTy::Bit4(_arg_name) => {
@@ -216,14 +217,14 @@ fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
                 ValueToken4::Const(value) => OpToken::Full(op.opcode() | value.into_low()),
                 ValueToken4::LabelRef(name) => OpToken::LabelRef(u4::from_high(op.opcode()), name),
             };
-            Located::new(token, parser.location().combine(value.location))
+            Located::new(token, loc.combine(value.location))
         }
         ArgOpTy::OneReg(_arg_name) => {
             let register = parse_next_reg(parser)?;
 
             Located::new(
                 OpToken::Full(op.opcode() | register.value.into_low()),
-                parser.location().combine(register.location),
+                loc.combine(register.location),
             )
         }
         ArgOpTy::TowReg(_arg0_name, _arg1_name) => {
@@ -234,10 +235,7 @@ fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
                 OpToken::Full(
                     op.opcode() | register0.value.into_low() << 2 | register1.value.into_low(),
                 ),
-                parser
-                    .location()
-                    .combine(register0.location)
-                    .combine(register1.location),
+                loc.combine(register0.location).combine(register1.location),
             )
         }
     })
