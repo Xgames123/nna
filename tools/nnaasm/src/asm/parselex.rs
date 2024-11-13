@@ -198,32 +198,32 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Tokenizer) -> Resul
 
 fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
     let op = OpCode::try_from_str(token).ok_or(LexError::static_located(
-        "Unknown operation. See spec for availible operations",
+        "Unknown operation. See spec for available operations",
         parser.location(),
     ))?;
     let loc = parser.location();
     Ok(match op.arg_types() {
-        ArgOpTy::None() => Located::new(OpToken::Full(op.opcode()), loc),
-        ArgOpTy::Bit2(_arg_name) => {
-            let value = parse_next_value2(parser)?;
-            Located::new(
-                OpToken::Full(op.opcode() | value.value.into_low()),
-                loc.combine(value.location),
-            )
-        }
+        ArgOpTy::None(bits) => Located::new(
+            OpToken::Full(op.opcode().into_high() | bits.into_low()),
+            loc,
+        ),
         ArgOpTy::Bit4(_arg_name) => {
             let value = parse_next_value4(parser)?;
             let token = match value.value {
-                ValueToken4::Const(value) => OpToken::Full(op.opcode() | value.into_low()),
-                ValueToken4::LabelRef(name) => OpToken::LabelRef(u4::from_high(op.opcode()), name),
+                ValueToken4::Const(value) => {
+                    OpToken::Full(op.opcode().into_high() | value.into_low())
+                }
+                ValueToken4::LabelRef(name) => OpToken::LabelRef(op.opcode(), name),
             };
             Located::new(token, loc.combine(value.location))
         }
-        ArgOpTy::OneReg(_arg_name) => {
+        ArgOpTy::OneReg(_arg_name, bits) => {
             let register = parse_next_reg(parser)?;
 
             Located::new(
-                OpToken::Full(op.opcode() | register.value.into_low()),
+                OpToken::Full(
+                    op.opcode().into_high() | (register.value.into_low() << 2) | bits.into_low(),
+                ),
                 loc.combine(register.location),
             )
         }
@@ -233,7 +233,9 @@ fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
 
             Located::new(
                 OpToken::Full(
-                    op.opcode() | register0.value.into_low() << 2 | register1.value.into_low(),
+                    op.opcode().into_high()
+                        | register0.value.into_low() << 2
+                        | register1.value.into_low(),
                 ),
                 loc.combine(register0.location).combine(register1.location),
             )

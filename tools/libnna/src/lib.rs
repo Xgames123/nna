@@ -22,17 +22,16 @@ impl Reg {
 
 ///Argument type of an operation
 pub enum ArgOpTy {
-    None(),
-    OneReg(&'static str),
+    None(u4),
+    OneReg(&'static str, u2),
     TowReg(&'static str, &'static str),
-    Bit2(&'static str),
     Bit4(&'static str),
 }
 impl Display for ArgOpTy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::None() => {}
-            Self::OneReg(name) => {
+            Self::None(_) => {}
+            Self::OneReg(name, _) => {
                 f.write_str("[")?;
                 f.write_str(name)?;
                 f.write_str("]")?
@@ -46,10 +45,6 @@ impl Display for ArgOpTy {
                 f.write_str(name2)?;
                 f.write_str("]")?
             }
-            Self::Bit2(name) => {
-                f.write_str(*name)?;
-                f.write_str(":2bit")?;
-            }
             Self::Bit4(name) => {
                 f.write_str(*name)?;
                 f.write_str(":4bit")?;
@@ -60,20 +55,17 @@ impl Display for ArgOpTy {
 }
 
 macro_rules! opargs {
-    (($desc:literal:reg)) => {
-        ArgOpTy::OneReg($desc)
+    (($desc:literal:reg),$arg:expr) => {
+        ArgOpTy::OneReg($desc, u2::from_low($arg))
     };
-    (($desc1:literal:reg, $desc2:literal:reg)) => {
+    (($desc1:literal:reg, $desc2:literal:reg),$arg:expr) => {
         ArgOpTy::TowReg($desc1, $desc2)
     };
-    (($desc:literal:4bit)) => {
+    (($desc:literal:4bit),$arg:expr) => {
         ArgOpTy::Bit4($desc)
     };
-    (($desc:literal:2bit)) => {
-        ArgOpTy::Bit2($desc)
-    };
-    (()) => {
-        ArgOpTy::None()
+    ((),$arg:expr) => {
+        ArgOpTy::None(u4::from_low($arg))
     };
 }
 
@@ -81,12 +73,12 @@ macro_rules! ops {
     ($vis:vis $name:ident{$($opname:literal:$opcode:literal$arg:tt),*}) => {
         $vis struct $name(u8);
         impl $name{
-            pub fn opcode(&self) -> u8{
-                self.0
+            pub fn opcode(&self) -> u4{
+                u4::from_high(self.0)
             }
             pub fn arg_types(&self) -> ArgOpTy{
                 match self.0{
-                    $($opcode => (opargs!($arg))),*,
+                    $($opcode => (opargs!($arg,self.0))),*,
                     _=>unreachable!(),
                 }
 
@@ -127,7 +119,7 @@ ops! {
         "lim":0x10("value":4bit),
         "mew":0x20("addr":4bit),
         "mer":0x30("addr":4bit),
-        "mov":0x40("source":reg, "dest":reg),
+        "mov":0x40("dest":reg, "source":reg),
         "jms":0x50("addr":4bit),
         "jmp":0x60("addr":reg, "bank":reg),
         "eq" :0x70("a":reg, "b":reg),
