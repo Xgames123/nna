@@ -53,7 +53,8 @@ There is 1 flag (overflow flag) that is set by some instructions when they overf
 | r0   | 4    | General purpose, Memory reads and writes use this register | yes       |
 | r1   | 4    | General purpose                                            | yes       |
 | r2   | 4    | General purpose                                            | yes       |
-| r3   | 4    | General purpose, Used as bank for read and write ops       | yes       |
+| r3   | 4    | General purpose,                                           | yes       |
+| rb   | 4    | Used as bank for read and write ops                        | no (rbs)  |
 | pc   | 8    | Program counter                                            | no        |
 
 # Instructions
@@ -65,14 +66,14 @@ Parameters that take a register are noted using: [param_description].
 | brk        | 0x0    | 01        | 00         | Break the debugger.                                                           |
 | flf        | 0x0    | 10        | 00         | Flips flag (if flag was set reset else set)                                   |
 | clf        | 0x0    | 11        | 00         | Clear flag                                                                    |
-| shl        | 0x0    | [reg]     | 01         | Shift reg left by 1 and stores the result in [reg].                           |
-| shr        | 0x0    | [reg]     | 10         | Shift reg right by 1 and stores the result in [reg.                           |
-| unassigned | 0x0    | [reg]     | 11         |                                                                               |
-| lim        | 0x1    | value_low | value_high | Loads the imidiate value into r0.                                             |
-| mew        | 0x2    | addr_low  | addr_high  | Writes r0 to memory at addr (uses r3 as bank select)                          |
-| mer        | 0x3    | addr_low  | addr_high  | Reads the value at memory address addr into r0 (uses r3 as bank select)       |
+| shl        | 0x0    | [reg]     | 01         | Shift reg left by 1 into the overflow flag and stores the result in [reg].    |
+| shr        | 0x0    | [reg]     | 10         | Shift reg right by 1 into the overflow flag and stores the result in [reg].   |
+| srb        | 0x0    | [reg]     | 11         | Store the value of [reg] in rb                                                |
+| lim        | 0x1    | value_low | value_high | Loads the immediate value into r0.                                            |
+| mwr        | 0x2    | [reg]     | [addr]     | Writes [reg] to memory at [addr]. (uses rb as bank select)                    |
+| mrd        | 0x3    | [reg]     | [addr]     | Reads the value at memory address [addr] into [reg]. (uses rb as bank select) |
 | mov        | 0x4    | [dest]    | [source]   | Copies (moves) the value from [source] into [dest].                           |
-| jms        | 0x5    | addr_low  | addr_high  | Static jump to addr when the overflow flag is set.                            |
+| bra        | 0x5    | addr_low  | addr_high  | Branch to addr when the overflow flag is set.                                 |
 | jmp        | 0x6    | [addr]    | [bank]     | Jumps to [addr] on bank [bank] when the overflow flag is set                  |
 | eq         | 0x7    | [a]       | [b]        | Sets the overflow flag when [a] == [b]                                        |
 | gt         | 0x8    | [a]       | [b]        | Sets the overflow flag when [a] > [b]                                         |
