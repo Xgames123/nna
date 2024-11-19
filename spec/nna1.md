@@ -54,7 +54,7 @@ There is 1 flag (overflow flag) that is set by some instructions when they overf
 | r1   | 4    | General purpose                                            | yes       |
 | r2   | 4    | General purpose                                            | yes       |
 | r3   | 4    | General purpose,                                           | yes       |
-| rb   | 4    | Used as bank for read and write ops                        | no (rbs)  |
+| rb   | 4    | Used as bank for read and write ops                        | no (srb)  |
 | pc   | 8    | Program counter                                            | no        |
 
 # Instructions
