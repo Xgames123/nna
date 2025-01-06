@@ -1,41 +1,28 @@
 # Memory
 Memory is divided into 16 banks that are each 16 nibbles big.
 
-> [!NOTE]
-> When the processor boots it starts executing from address 0x00.
+| addr range | function |
+|------------|----------|
+| 00 -> EF   | ram rw   |
+| F0 -> FF   | io bank  |
 
-| addr range | function                |
-|------------|-------------------------|
-| 00 -> E0   |                         |
-| E0 -> E3   | reserved for future use |
-| E4 -> EF   |                         |
-| F0 -> FF   | io ports p0 -> p3       |
+# IO Bank
+The IO bank contains memory mapped peripherals.
+Which peripherals are available depends on the [chip variant](chip_variants.md)
 
-# Ports
-The last bank (F) is divided into 4 ports (p0 -> p3) each 16 pins in size.
+## Boot Dev
+All nna chips have the boot device at address 0xF0
+Reading/writing from the first 4 bits reads/writes them to the device at the address pointed to by the 16 bits following
 
-- The first 4 nibbles of each port (pin 0 -> 7) are always used as INPUTS
-- The next 4 nibbles of each port (pin 8 -> 16) are always used as OUTPUTS
+| offset |  size   |  name   |
+|--------|---------|---------|
+| 0 bits | 4 bits  | data    |
+| 4 bits | 16 bits | address |
 
-| port | addr | pins     | direction |
-|------|------|----------|-----------|
-| p0   | 0xF0 | 0 -> 3   | INPUT     |
-| p0   | 0xF1 | 4 -> 7   | INPUT     |
-| p0   | 0xF2 | 8 -> 11  | OUTPUT    |
-| p0   | 0xF3 | 12 -> 16 | OUTPUT    |
-| p1   | 0xF4 | 0 -> 3   | INPUT     |
-| p1   | 0xF5 | 4 -> 7   | INPUT     |
-| p1   | 0xF6 | 8 -> 11  | OUTPUT    |
-| p1   | 0xF7 | 12 -> 16 | OUTPUT    |
-| p2   | 0xF8 | 0 -> 3   | INPUT     |
-| p2   | 0xF9 | 4 -> 7   | INPUT     |
-| p2   | 0xFA | 8 -> 11  | OUTPUT    |
-| p2   | 0xFB | 12 -> 16 | OUTPUT    |
-| p3   | 0xFC | 0 -> 3   | INPUT     |
-| p3   | 0xFD | 4 -> 7   | INPUT     |
-| p3   | 0xFE | 8 -> 11  | OUTPUT    |
-| p3   | 0xFF | 12 -> 16 | OUTPUT    |
-
+# Boot Sequence
+1. The first 16 nibs are copied from the boot device
+2. All registers and flags are reset to 0
+3. Execution begins at 0x00
 
 # Flags
 There is 1 flag (overflow flag) that is set by some instructions when they overflow and used by jump instructions to conditionally jump.
