@@ -8,4 +8,6 @@ mov r2 r1 ; this at A1
 label_name: ; define label
 
 &label_name ; ref to label
+&label_name.low ; ref to low part of label
+&label_name.high ; ref to high part of label
 ```

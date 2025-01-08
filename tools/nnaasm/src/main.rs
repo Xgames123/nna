@@ -71,7 +71,7 @@ fn main() {
         die!("Failed to read '{}'\n{}", cli.input, err);
     });
 
-    let unpacked = match asm::assemble(filename.into(), &input_data) {
+    let output = match asm::assemble(filename.into(), &input_data) {
         Ok(out) => out,
         Err(err) => {
             err.print();
@@ -80,13 +80,10 @@ fn main() {
     };
 
     if cli.memory_usage {
-        println!(
-            "Using {}/16 banks",
-            asm::codegen::count_nonzero_banks(&unpacked)
-        );
+        let mem_usage = asm::codegen::calc_mem_usage(&output);
+        println!("Using {}/{} bytes", mem_usage.start, mem_usage.end);
     }
-    let packed = asm::codegen::pack(unpacked);
-    fs::write(output_file, packed).unwrap_or_else(|err| {
+    fs::write(output_file, output).unwrap_or_else(|err| {
         die!("Failed to write output file:\n{}", err);
     });
 }

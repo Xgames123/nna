@@ -7,22 +7,89 @@ use libnna::{u2, u4, ArgOpTy};
 
 type Result<T> = std::result::Result<Located<T>, Located<LexError>>;
 
+pub trait UnsignedNum
+where
+    Self: Sized,
+{
+    const THEORETICAL_SIZE: usize;
+    fn parse_hex(str: &str) -> Option<Self>;
+}
+impl UnsignedNum for u8 {
+    const THEORETICAL_SIZE: usize = 8;
+
+    fn parse_hex(str: &str) -> Option<Self> {
+        let str = str.to_lowercase();
+        if str.len() != 2 {
+            return None;
+        }
+
+        u8::from_str_radix(&str, 16).ok()
+    }
+}
+impl UnsignedNum for u4 {
+    const THEORETICAL_SIZE: usize = 4;
+
+    fn parse_hex(str: &str) -> Option<Self> {
+        let str = str.to_lowercase();
+        if str.len() != 1 {
+            return None;
+        }
+        for char in str.chars() {
+            return char.to_digit(16).map(|val| u4::from_u32(val));
+        }
+        return None;
+    }
+}
+impl UnsignedNum for u2 {
+    const THEORETICAL_SIZE: usize = 2;
+
+    fn parse_hex(str: &str) -> Option<Self> {
+        if str.len() != 1 {
+            return None;
+        }
+        match str {
+            "0" => Some(u2::ZERO),
+            "1" => Some(u2::ONE),
+            "2" => Some(u2::TOW),
+            "3" => Some(u2::THREE),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub enum ValueToken4 {
-    LabelRef(Box<str>),
-    Const(u4),
+pub enum ValueToken<T: UnsignedNum> {
+    LabelRef(Box<str>, RefType),
+    Const(T),
+}
+pub type ValueToken8 = ValueToken<u8>;
+pub type ValueToken4 = ValueToken<u4>;
+
+#[derive(Debug, Clone)]
+pub enum RefType {
+    Full,
+    Low,
+    High,
+}
+impl RefType {
+    pub fn is_full(&self) -> bool {
+        match self {
+            Self::Full => true,
+            _ => false,
+        }
+    }
 }
 #[derive(Debug, Clone)]
 pub enum OpToken {
     Full(u8),
-    LabelRef(u4, Box<str>),
+    LabelRef(u4, Box<str>, RefType),
 }
 
 #[derive(Debug, Clone)]
 pub enum Token {
     LabelDef(Box<str>),
     Org(u8),
-    Value(ValueToken4),
+    Value(ValueToken<u8>),
     Op(OpToken),
 }
 impl Token {
@@ -69,64 +136,44 @@ impl IntoAsmError for Located<LexError> {
     }
 }
 
-fn parse_hex4<'a>(str: &'a str) -> Option<u4> {
-    let str = str.to_lowercase();
-    if str.len() != 1 {
-        return None;
-    }
-    for char in str.chars() {
-        return char.to_digit(16).map(|val| u4::from_u32(val));
-    }
-    return None;
-}
-fn parse_hex8<'a>(str: &'a str) -> Option<u8> {
-    let str = str.to_lowercase();
-    if str.len() != 2 {
-        return None;
-    }
-
-    u8::from_str_radix(&str, 16).ok()
-}
-fn parse_identifier(str: &str) -> Option<Box<str>> {
+fn parse_identifier<'a>(str: &'a str) -> Option<&'a str> {
     for char in str.chars() {
         if !char.is_alphabetic() && char != '_' {
+            println!("char: {}", char);
             return None;
         }
     }
-    Some(str[1..].into())
+    Some(&str[1..])
 }
 
-fn parse_hex2(str: &str) -> Option<u2> {
-    if str.len() != 1 {
-        return None;
-    }
-    match str {
-        "0" => Some(u2::ZERO),
-        "1" => Some(u2::ONE),
-        "2" => Some(u2::TOW),
-        "3" => Some(u2::THREE),
-        _ => None,
-    }
-}
-
-fn parse_value4(
+fn parse_value<T: UnsignedNum>(
     token: &str,
     location: Location,
-) -> std::result::Result<Option<Located<ValueToken4>>, Located<LexError>> {
+) -> std::result::Result<Option<Located<ValueToken<T>>>, Located<LexError>> {
     if token.starts_with("0x") {
-        let value = parse_hex4(&token[2..]).ok_or(LexError::static_located(
-            "Invalid 4 bit hex literal",
+        let value = T::parse_hex(&token[2..]).ok_or(LexError::located(
+            format!("Invalid {} bit hex literal", T::THEORETICAL_SIZE).into(),
             location.clone(),
         ))?;
-        return Ok(Some(Located::new(ValueToken4::Const(value), location)));
+        return Ok(Some(Located::new(ValueToken::Const(value), location)));
     }
 
     if token.starts_with("&") {
-        let value = parse_identifier(&token[1..]).ok_or(LexError::static_located(
+        let (token, ref_type) = if token.ends_with(".low") {
+            (&token[1..token.len() - 4], RefType::Low)
+        } else if token.ends_with(".high") {
+            (&token[1..token.len() - 5], RefType::High)
+        } else {
+            (&token[1..], RefType::Full)
+        };
+        let value = parse_identifier(&token).ok_or(LexError::static_located(
             "Label ref contains invalid characters.",
             location.clone(),
         ))?;
-        return Ok(Some(Located::new(ValueToken4::LabelRef(value), location)));
+        return Ok(Some(Located::new(
+            ValueToken::LabelRef(value.into(), ref_type),
+            location,
+        )));
     }
 
     Ok(None)
@@ -136,7 +183,7 @@ fn parse_next_hex8(parser: &mut Tokenizer) -> Result<u8> {
     let token = parser.next_same_line_or_err(Cow::Borrowed(
         "Expected an 8 bit constant value after this.",
     ))?;
-    let value = parse_hex8(token).ok_or(LexError::static_located(
+    let value = u8::parse_hex(token).ok_or(LexError::static_located(
         "Expected an 8 bit constant value.",
         parser.location(),
     ))?;
@@ -144,25 +191,18 @@ fn parse_next_hex8(parser: &mut Tokenizer) -> Result<u8> {
     Ok(Located::new(value, parser.location()))
 }
 
-fn parse_next_value4(parser: &mut Tokenizer) -> Result<ValueToken4> {
-    let token =
-        parser.next_same_line_or_err(Cow::Borrowed("Expected a 4 bit value after this."))?;
-    match parse_value4(token, parser.location())? {
+fn parse_next_value<T: UnsignedNum>(parser: &mut Tokenizer) -> Result<ValueToken<T>> {
+    let token = parser.next_same_line_or_err(Cow::Owned(format!(
+        "Expected an {} bit value after this.",
+        T::THEORETICAL_SIZE
+    )))?;
+    match parse_value::<T>(token, parser.location())? {
         Some(v) => Ok(v),
-        None => Err(LexError::static_located(
-            "Expected a 4 bit value.",
+        None => Err(LexError::located(
+            format!("Expected an {} bit value.", T::THEORETICAL_SIZE).into(),
             parser.location(),
         )),
     }
-}
-fn parse_next_value2(parser: &mut Tokenizer) -> Result<u2> {
-    let token =
-        parser.next_same_line_or_err(Cow::Borrowed("Expected a 2 bit value after this."))?;
-    let value = parse_hex2(token).ok_or(LexError::static_located(
-        "Expected an 2 bit value.",
-        parser.location(),
-    ))?;
-    Ok(Located::new(value, parser.location()))
 }
 fn parse_next_reg(parser: &mut Tokenizer) -> Result<u2> {
     let token = parser.next_same_line_or_err(Cow::Borrowed("Expected a register after this."))?;
@@ -208,12 +248,17 @@ fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
             loc,
         ),
         ArgOpTy::Bit4(_arg_name) => {
-            let value = parse_next_value4(parser)?;
+            let value = parse_next_value::<u4>(parser)?;
             let token = match value.value {
                 ValueToken4::Const(value) => {
                     OpToken::Full(op.opcode().into_high() | value.into_low())
                 }
-                ValueToken4::LabelRef(name) => OpToken::LabelRef(op.opcode(), name),
+                ValueToken4::LabelRef(name, ref_type) => {
+                    if ref_type.is_full() {
+                        return Err(LexError::static_located("Cant fit a full sized reference (8 bits) into 4 bits. Use .low or .high sufix to get the low or high part of the reference.", parser.location()));
+                    }
+                    OpToken::LabelRef(op.opcode(), name, ref_type)
+                }
             };
             Located::new(token, loc.combine(value.location))
         }
@@ -261,7 +306,7 @@ pub fn parse_lex(input: &str) -> std::result::Result<Vec<Located<Token>>, Locate
         if token.ends_with(':') {
             out_vec.push(
                 parse_identifier(&token[..token.len() - 1])
-                    .map(|label| Located::new(Token::LabelDef(label), parser.location()))
+                    .map(|label| Located::new(Token::LabelDef(label.into()), parser.location()))
                     .ok_or(LexError::static_located(
                         "invalid label name",
                         parser.location(),
@@ -270,7 +315,7 @@ pub fn parse_lex(input: &str) -> std::result::Result<Vec<Located<Token>>, Locate
             continue;
         }
 
-        if let Some(value) = parse_value4(token, parser.location())? {
+        if let Some(value) = parse_value::<u8>(token, parser.location())? {
             out_vec.push(value.map(|vt| Token::Value(vt)));
             continue;
         }

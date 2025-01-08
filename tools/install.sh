@@ -20,14 +20,14 @@ fi
 cd $(dirname $0)
 
 if [ "$1" = "-u" ] ; then
-  for tool in TOOLS ; do
+  for tool in $TOOLS ; do
     sudo rm -f /usr/local/bin/$tool
   done
   exit 0
 fi
 
 
-for tool in TOOLS ; do
+for tool in $TOOLS ; do
   if ! cargo build --release --bin $tool ; then
     echo "Build failed"
     exit 1

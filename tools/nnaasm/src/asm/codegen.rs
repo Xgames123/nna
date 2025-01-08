@@ -1,24 +1,20 @@
-use std::{collections::HashMap, fmt::Display, rc::Rc};
+use std::{collections::HashMap, fmt::Display, ops::Range, rc::Rc};
 
 use libnna::u4;
 
 use super::{
-    parselex::{OpToken, Token, ValueToken4},
+    parselex::{OpToken, RefType, Token, ValueToken8},
     IntoAsmError, Located, Location,
 };
 
 pub enum CodeGenError {
     NoOrg(),
     OrgOverlap(Org, Org),
-    UnalignedOp(),
     LabelNotDefined(Box<str>),
 }
 impl IntoAsmError for Located<CodeGenError> {
     fn into_asm_error<'a>(self, code: &'a str, filename: Rc<str>) -> super::AsmError<'a> {
         let message = match self.value {
-            CodeGenError::UnalignedOp() => {
-                "Operation is not 2 bit aligned.".to_string()
-            }
             CodeGenError::NoOrg() => {
                 "Everything needs to be defined inside an .org statement. Else the assembler can't know where to put it in the final output binary".to_string()
             }
@@ -36,21 +32,16 @@ impl IntoAsmError for Located<CodeGenError> {
     }
 }
 
-pub fn count_nonzero_banks(data: &[u4; 256]) -> usize {
-    let mut count = 0;
-    for bank in data.chunks(16) {
-        let mut zero = true;
-        for nib in bank {
-            if *nib != u4::ZERO {
-                zero = false;
-                break;
-            }
+pub fn calc_mem_usage(data: &[u8; 256]) -> Range<usize> {
+    let mut zero_bytes = 0;
+    for byte in &data[..240] {
+        if *byte != 0 {
+            zero_bytes = 0;
+            continue;
         }
-        if zero {
-            count += 1;
-        }
+        zero_bytes += 1;
     }
-    count
+    (240 - zero_bytes)..240
 }
 
 // fn emit_hex(data: [u4; 256]) -> Vec<u8> {
@@ -97,8 +88,8 @@ impl Org {
     pub fn write(
         start_addr: u8,
         location: Location,
-        data: &[u4],
-        bin: &mut [u4; 256],
+        data: &[u8],
+        bin: &mut [u8; 256],
         orgs: &[Org],
     ) -> Result<Org, Located<CodeGenError>> {
         let size = data.len() as u8;
@@ -120,24 +111,31 @@ impl Org {
 }
 
 fn resolve_labels(
-    output: &mut [u4; 256],
+    output: &mut [u8; 256],
     labels: HashMap<Box<str>, u8>,
-    label_refs: Vec<Located<(Box<str>, u8)>>,
+    label_refs: Vec<Located<(Box<str>, u8, RefType)>>,
 ) -> Result<(), Located<CodeGenError>> {
     for lref in label_refs {
-        let (name, addr) = lref.value;
+        let (name, addr, ref_type) = lref.value;
         let pointed_addr = labels
             .get(&name)
             .ok_or_else(|| Located::new(CodeGenError::LabelNotDefined(name), lref.location))?;
 
-        output[addr as usize] = u4::from_low(*pointed_addr);
+        let masked = match ref_type {
+            RefType::Low => *pointed_addr & 0x0F,
+            RefType::High => *pointed_addr & 0xF0 >> 4,
+            RefType::Full => *pointed_addr,
+        };
+
+        // Or this with the output because it could be a ref on the end of an instruction
+        output[addr as usize] |= masked;
     }
 
     Ok(())
 }
 
-pub fn gen_unpacked(tt: Vec<Located<Token>>) -> Result<[u4; 256], Located<CodeGenError>> {
-    let mut bin = [u4::ZERO; 256];
+pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> {
+    let mut bin = [0; 256];
     let mut label_refs = Vec::new();
     let mut orgs = Vec::new();
     let mut labels = HashMap::new();
@@ -158,30 +156,22 @@ pub fn gen_unpacked(tt: Vec<Located<Token>>) -> Result<[u4; 256], Located<CodeGe
     for token in tt_iter {
         match token.value {
             Token::Op(OpToken::Full(byte)) => {
-                if (cur_org_addr as usize + data.len()) % 2 != 0 {
-                    return Err(Located::new(CodeGenError::UnalignedOp(), token.location));
-                }
-                data.push(u4::from_low(byte));
-                data.push(u4::from_high(byte));
+                data.push(byte);
             }
-            Token::Op(OpToken::LabelRef(instruct, label_ref)) => {
-                if (cur_org_addr as usize + data.len()) % 2 != 0 {
-                    return Err(Located::new(CodeGenError::UnalignedOp(), token.location));
-                }
-                data.push(instruct);
+            Token::Op(OpToken::LabelRef(instruct, label_ref, ref_type)) => {
                 label_refs.push(Located::new(
-                    (label_ref, cur_org_addr + data.len() as u8),
+                    (label_ref, cur_org_addr + data.len() as u8, ref_type),
                     token.location,
                 ));
-                data.push(u4::ZERO);
+                data.push(instruct.into_high());
             }
-            Token::Value(ValueToken4::Const(value)) => data.push(value),
-            Token::Value(ValueToken4::LabelRef(name)) => {
+            Token::Value(ValueToken8::Const(value)) => data.push(value),
+            Token::Value(ValueToken8::LabelRef(name, ref_type)) => {
                 label_refs.push(Located::new(
-                    (name, cur_org_addr + data.len() as u8),
+                    (name, cur_org_addr + data.len() as u8, ref_type),
                     token.location,
                 ));
-                data.push(u4::ZERO)
+                data.push(0)
             }
             Token::LabelDef(name) => {
                 labels.insert(name, cur_org_addr + data.len() as u8);

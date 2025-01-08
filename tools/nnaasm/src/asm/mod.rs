@@ -3,8 +3,6 @@ use std::{
     rc::Rc,
 };
 
-use libnna::u4;
-
 use self::parselex::parse_lex;
 
 pub mod codegen;
@@ -140,7 +138,7 @@ pub trait IntoAsmError {
     fn into_asm_error<'a>(self, code: &'a str, filename: Rc<str>) -> AsmError<'a>;
 }
 
-pub fn assemble(filename: Rc<str>, input: &str) -> Result<[u4; 256], AsmError> {
+pub fn assemble(filename: Rc<str>, input: &str) -> Result<[u8; 256], AsmError> {
     let parsed = parse_lex(input).map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
-    Ok(codegen::gen_unpacked(parsed).map_err(|cg| cg.into_asm_error(&input, filename.clone()))?)
+    Ok(codegen::gen(parsed).map_err(|cg| cg.into_asm_error(&input, filename.clone()))?)
 }
