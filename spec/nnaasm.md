@@ -7,6 +7,5 @@ mov r2 r1 ; this at A1
 
 label_name: ; define label
 
-&label_name ; ref to label as 1 nib
-&&label_name ; ref to label as 1 byte
+&label_name ; ref to label
 ```
