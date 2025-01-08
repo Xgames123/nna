@@ -1,5 +1,6 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use std::{
+    ffi::OsStr,
     fs,
     io::{self, Read},
     path::Path,
@@ -7,6 +8,13 @@ use std::{
 };
 use stderrlog::LogLevelNum;
 mod asm;
+
+#[derive(ValueEnum, Clone)]
+enum OutputFormat {
+    Auto,
+    Bin,
+    Hex,
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -27,6 +35,10 @@ struct Cli {
     /// The minimum log level
     #[arg(long, default_value = "0")]
     log_level: usize,
+
+    /// The format of the output file
+    #[arg(short = 'f', long, default_value = "auto")]
+    format: OutputFormat,
 }
 
 fn get_input_data(path: &str) -> io::Result<(Box<str>, String)> {
@@ -56,6 +68,44 @@ macro_rules! die {
     };
 }
 
+#[inline]
+fn u4_to_hex(val: u8) -> char {
+    let lower = val & 0x0F;
+    if lower > 9 {
+        (lower + 55) as char
+    } else {
+        (lower + 48) as char
+    }
+}
+
+#[inline]
+fn write_hexline(str: &mut String, byte: u8, repeat_count: usize) {
+    if repeat_count > 1 {
+        str.push_str(&repeat_count.to_string());
+        str.push('*');
+    }
+    str.push(u4_to_hex(byte >> 4));
+    str.push(u4_to_hex(byte));
+    str.push('\n');
+}
+
+fn write_hex(input: &[u8; 256]) -> Vec<u8> {
+    let mut output = "v2.0 raw\n".to_string();
+    let mut prev_byte = input[0];
+    let mut repeat_count = 0;
+    for byte in input {
+        if *byte == prev_byte {
+            repeat_count += 1;
+            continue;
+        }
+        write_hexline(&mut output, prev_byte, repeat_count);
+        prev_byte = *byte;
+        repeat_count = 1;
+    }
+    write_hexline(&mut output, prev_byte, repeat_count);
+    output.into_bytes()
+}
+
 fn main() {
     let cli = Cli::parse();
     stderrlog::new()
@@ -83,7 +133,20 @@ fn main() {
         let mem_usage = asm::codegen::calc_mem_usage(&output);
         println!("Using {}/{} bytes", mem_usage.start, mem_usage.end);
     }
-    fs::write(output_file, output).unwrap_or_else(|err| {
+
+    let output = match cli.format {
+        OutputFormat::Bin => output.into(),
+        OutputFormat::Hex => write_hex(&output),
+        OutputFormat::Auto => {
+            if output_file.extension() == Some(OsStr::new("hex")) {
+                write_hex(&output)
+            } else {
+                output.into()
+            }
+        }
+    };
+
+    fs::write(output_file, &output).unwrap_or_else(|err| {
         die!("Failed to write output file:\n{}", err);
     });
 }
