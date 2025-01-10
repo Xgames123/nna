@@ -71,7 +71,7 @@ Parameters that take a register are noted using: [description].
 | add       | 0xa    |  [a]   |   [b]    | Adds [a] to the [b] and stores it to [a]. (Sets the overflow flag)            |
 | mul       | 0xB    |  [a]   |   [b]    | Multiplies [a] with [b] and store the result in [a]. (Sets the overflow flag) |
 | and       | 0xC    |  [a]   |   [b]    | and's [a] and [b] and stores the result in [a]                                |
-| nand      | 0xD    |  [a]   |   [b]    | nand's [a] and [b] and stores the result in [a]                               |
+| not       | 0xD    |  [a]   |   [b]    | inverts [b] and stores the result in [a]                                      |
 | or        | 0xE    |  [a]   |   [b]    | or's [a] and [b] and stores the result in [a].                                |
 | xor       | 0xF    |  [a]   |   [b]    | xor's [a] and [b] and stores the result in [a].                               |
 
