@@ -1,4 +1,4 @@
-.org 00
+.org 0x00
 
 ; cmp check
 lih 0x2
@@ -44,4 +44,4 @@ brk
 ; clf
 ; brk
 
-.org 10
+.org 0x10

@@ -8,6 +8,7 @@ pub struct Tokenizer<'a> {
     code: &'a str,
     cur_col: usize,
     cur_char: char,
+    end: bool,
     char_iter: std::str::CharIndices<'a>,
     last_location: Location,
 }
@@ -17,6 +18,7 @@ impl<'a> Tokenizer<'a> {
             last_location: (0, 0..0).into(),
             cur_char: '\0',
             code,
+            end: false,
             cur_linenum: 0,
             cur_index: 0,
             cur_col: 0,
@@ -28,21 +30,29 @@ impl<'a> Tokenizer<'a> {
             if self.cur_char == '\n' {
                 return Some(());
             }
-            self.next_char();
+            self.next_char_skip_comments()?;
         }
     }
     pub fn next_char(&mut self) -> Option<()> {
-        let (index, char) = self.char_iter.next()?;
+        let Some((index, char)) = self.char_iter.next() else {
+            self.end = true;
+            return None;
+        };
         let size = index - self.cur_index;
         self.cur_index = index;
         self.cur_col += size;
         if self.cur_char == '\n' {
             self.cur_linenum += 1;
             self.cur_col = 0;
+            // println!("newline");
         }
         self.cur_char = char;
+        Some(())
+    }
+    pub fn next_char_skip_comments(&mut self) -> Option<()> {
+        self.next_char()?;
         if self.cur_char == ';' {
-            self.skip_line();
+            return self.skip_line();
         }
         Some(())
     }
@@ -66,17 +76,25 @@ impl<'a> Tokenizer<'a> {
 
     pub fn next_same_line(&mut self) -> Option<&'a str> {
         loop {
+            // println!(
+            //     "next_same_line: cur_char:{} cur_col:{}",
+            //     self.cur_char, self.cur_col
+            // );
             if self.cur_char == '\n' {
                 return None;
             }
             if !self.cur_char.is_whitespace() {
-                return self.to_end_of_token();
+                return self.read_cur_token();
             }
-            self.next_char()?;
+            self.next_char_skip_comments()?;
         }
     }
 
-    fn to_end_of_token(&mut self) -> Option<&'a str> {
+    fn read_cur_token(&mut self) -> Option<&'a str> {
+        //println!("read cur token start_col: {}", self.cur_col);
+        if self.end {
+            return None;
+        }
         let start_col = self.cur_col;
         let start_index = self.cur_index;
         loop {
@@ -84,7 +102,10 @@ impl<'a> Tokenizer<'a> {
                 self.last_location = (self.cur_linenum, start_col..self.cur_col).into();
                 return Some(&self.code[start_index..self.cur_index]);
             }
-            self.next_char();
+            if self.next_char_skip_comments().is_none() {
+                self.last_location = (self.cur_linenum, start_col..self.cur_col + 1).into();
+                return Some(&self.code[start_index..self.cur_index + 1]);
+            }
         }
     }
 }
@@ -92,10 +113,11 @@ impl<'a> Iterator for Tokenizer<'a> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if !self.cur_char.is_whitespace() {
+            //println!("cur_char: {}", self.cur_char);
+            if !self.cur_char.is_whitespace() && self.cur_char != '\0' {
                 return self.next_same_line();
             }
-            self.next_char()?;
+            self.next_char_skip_comments()?;
         }
     }
 }
@@ -112,18 +134,18 @@ mod tests {
 
         let mut cp = Tokenizer::new(code).unwrap();
 
-        cp.next_char();
+        cp.next_char_skip_comments();
         assert_eq!(cp.cur_char, '1');
         assert_eq!(cp.cur_index, 0);
         assert_eq!(cp.cur_col, 0);
         assert_eq!(cp.cur_linenum, 0);
-        cp.next_char();
+        cp.next_char_skip_comments();
 
         assert_eq!(cp.cur_char, '\n');
         assert_eq!(cp.cur_index, 1);
         assert_eq!(cp.cur_col, 1);
         assert_eq!(cp.cur_linenum, 0);
-        cp.next_char();
+        cp.next_char_skip_comments();
 
         assert_eq!(cp.cur_char, '2');
         assert_eq!(cp.cur_index, 2);
@@ -138,7 +160,7 @@ mod tests {
 token1 ; comment
 token2
 token3
-"#;
+r1 r0"#;
 
         let mut cp = Tokenizer::new(code).unwrap();
 
@@ -150,6 +172,23 @@ token3
         assert_eq!(cp.last_location, Location::from((3, 0..6)));
         assert_eq!(cp.next(), Some("token3"));
         assert_eq!(cp.last_location, Location::from((4, 0..6)));
+        assert_eq!(cp.next(), Some("r1"));
+        assert_eq!(cp.next(), Some("r0"));
         assert_eq!(cp.next(), None);
+    }
+
+    #[test]
+    fn whitespace() {
+        let code = r#"
+token0
+
+between_token
+
+token_attached_to_end"#;
+        let mut cp = Tokenizer::new(code).unwrap();
+        assert_eq!(cp.next(), Some("token0"));
+        assert_eq!(cp.next(), Some("between_token"));
+        assert_eq!(cp.next(), Some("token_attached_to_end"));
+        assert_eq!(cp.last_location, Location::from((5, 0..21)));
     }
 }

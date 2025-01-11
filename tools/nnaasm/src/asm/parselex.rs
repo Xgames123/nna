@@ -18,19 +18,17 @@ impl UnsignedNum for u8 {
     const THEORETICAL_SIZE: usize = 8;
 
     fn parse_hex(str: &str) -> Option<Self> {
-        let str = str.to_lowercase();
-        if str.len() != 2 {
+        if str.len() > 2 {
             return None;
         }
 
-        u8::from_str_radix(&str, 16).ok()
+        u8::from_str_radix(str, 16).ok()
     }
 }
 impl UnsignedNum for u4 {
     const THEORETICAL_SIZE: usize = 4;
 
     fn parse_hex(str: &str) -> Option<Self> {
-        let str = str.to_lowercase();
         if str.len() != 1 {
             return None;
         }
@@ -72,6 +70,15 @@ pub enum RefType {
     High,
 }
 impl RefType {
+    ///Mask bits depending on the ref type.
+    ///If 4 bit value put at the low end of the returning u8
+    pub fn mask_low(self, value: u8) -> u8 {
+        match self {
+            RefType::Low => value & 0x0F,
+            RefType::High => value & 0xF0 >> 4,
+            RefType::Full => value,
+        }
+    }
     pub fn is_full(&self) -> bool {
         match self {
             Self::Full => true,
@@ -90,6 +97,7 @@ pub enum Token {
     LabelDef(Box<str>),
     Org(u8),
     Value(ValueToken<u8>),
+    AssertMaxDist(ValueToken<u8>, u8),
     Op(OpToken),
 }
 impl Token {
@@ -183,8 +191,14 @@ fn parse_next_hex8(parser: &mut Tokenizer) -> Result<u8> {
     let token = parser.next_same_line_or_err(Cow::Borrowed(
         "Expected an 8 bit constant value after this.",
     ))?;
-    let value = u8::parse_hex(token).ok_or(LexError::static_located(
-        "Expected an 8 bit constant value.",
+    if !token.starts_with("0x") {
+        return Err(LexError::static_located(
+            "Expected an 8 bit constant value.",
+            parser.location(),
+        ));
+    }
+    let value = u8::parse_hex(&token[2..]).ok_or(LexError::static_located(
+        "Invalid 8 bit hex literal",
         parser.location(),
     ))?;
 
@@ -219,12 +233,22 @@ fn parse_next_reg(parser: &mut Tokenizer) -> Result<u2> {
 }
 
 fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<Token> {
+    let token_loc = parser.location();
     match token {
         "org" => {
             let addr = parse_next_hex8(parser)?;
             return Ok(Located::new(
                 Token::Org(addr.value),
-                parser.location().combine(addr.location),
+                token_loc.combine(addr.location),
+            ));
+        }
+        "assert_max_dist" => {
+            let start = parse_next_value::<u8>(parser)?;
+            let dist = parse_next_hex8(parser)?;
+
+            return Ok(Located::new(
+                Token::AssertMaxDist(start.value, dist.value),
+                token_loc.combine(dist.location),
             ));
         }
         _ => {

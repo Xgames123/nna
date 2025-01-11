@@ -11,6 +11,7 @@ pub enum CodeGenError {
     NoOrg(),
     OrgOverlap(Org, Org),
     LabelNotDefined(Box<str>),
+    MaxDistAssertionFailed(u8),
 }
 impl IntoAsmError for Located<CodeGenError> {
     fn into_asm_error<'a>(self, code: &'a str, filename: Rc<str>) -> super::AsmError<'a> {
@@ -21,6 +22,9 @@ impl IntoAsmError for Located<CodeGenError> {
             CodeGenError::LabelNotDefined(name) => format!("label '{}' is not defined", name),
             CodeGenError::OrgOverlap(org0, org1) => {
                 format!("This org ({}) overlaps with: {}", org0, org1)
+            },
+            CodeGenError::MaxDistAssertionFailed(size) => {
+                format!("Assertion failed. distance was {:#04x}", size)
             }
         };
         super::AsmError {
@@ -110,25 +114,32 @@ impl Org {
     }
 }
 
+#[inline]
+fn resolve_label(
+    labels: &HashMap<Box<str>, u8>,
+    label: Located<(Box<str>, RefType)>,
+) -> Result<u8, Located<CodeGenError>> {
+    let resolved_label_addr = labels.get(&label.value.0).ok_or_else(|| {
+        Located::new(CodeGenError::LabelNotDefined(label.value.0), label.location)
+    })?;
+
+    Ok(label.value.1.mask_low(*resolved_label_addr))
+}
+
 fn resolve_labels(
     output: &mut [u8; 256],
     labels: HashMap<Box<str>, u8>,
-    label_refs: Vec<Located<(Box<str>, u8, RefType)>>,
+    mut label_refs: Vec<Located<(Box<str>, u8, RefType)>>,
 ) -> Result<(), Located<CodeGenError>> {
-    for lref in label_refs {
-        let (name, addr, ref_type) = lref.value;
-        let pointed_addr = labels
-            .get(&name)
-            .ok_or_else(|| Located::new(CodeGenError::LabelNotDefined(name), lref.location))?;
+    for lref in label_refs.drain(..) {
+        let addr = lref.value.1;
 
-        let masked = match ref_type {
-            RefType::Low => *pointed_addr & 0x0F,
-            RefType::High => *pointed_addr & 0xF0 >> 4,
-            RefType::Full => *pointed_addr,
-        };
-
-        // Or this with the output because it could be a ref on the end of an instruction
-        output[addr as usize] |= masked;
+        // Or with the output because it could be a ref on the end of an instruction.
+        // cases:
+        // output[addr] = 0x00 => or is fine because or(0,0) = 0 and or(0,1)=1
+        // output[addr] = 0x30 => or is fine because bits are masked
+        output[addr as usize] |=
+            resolve_label(&labels, lref.map(|(name, _, ref_type)| (name, ref_type)))?;
     }
 
     Ok(())
@@ -137,6 +148,7 @@ fn resolve_labels(
 pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> {
     let mut bin = [0; 256];
     let mut label_refs = Vec::new();
+    let mut assert_max_dists = Vec::new();
     let mut orgs = Vec::new();
     let mut labels = HashMap::new();
 
@@ -183,40 +195,49 @@ pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> 
                 cur_org_loc = token.location;
                 cur_org_addr = addr;
             }
+            Token::AssertMaxDist(start, dist) => {
+                let end = Located::new(
+                    cur_org_addr.saturating_add(data.len() as u8),
+                    token.location,
+                );
+                match start {
+                    ValueToken8::Const(start) => assert_max_dist(end, start, dist)?,
+                    ValueToken8::LabelRef(label, ref_type) => {
+                        assert_max_dists.push((end, label, ref_type, dist));
+                    }
+                }
+            }
         }
     }
     //write last org
     Org::write(cur_org_addr, cur_org_loc, &data, &mut bin, &orgs)?;
 
+    for (end, label, ref_type, max_dist) in assert_max_dists.drain(..) {
+        let resolved = resolve_label(
+            &labels,
+            Located::new((label, ref_type), end.location.clone()),
+        )?;
+        assert_max_dist(end, resolved, max_dist)?;
+    }
+
     resolve_labels(&mut bin, labels, label_refs)?;
 
     Ok(bin)
 }
-pub fn pack(data: [u4; 256]) -> [u8; 128] {
-    let mut output = [0u8; 128];
-    for (i, nibpair) in data.chunks(2).into_iter().enumerate() {
-        let high = nibpair[0].into_high(); // high is <<
-        let low = nibpair[1].into_low(); // low is >>
 
-        output[i] = low | high;
+fn assert_max_dist(end: Located<u8>, start: u8, max_dist: u8) -> Result<(), Located<CodeGenError>> {
+    let dist = if start > end.value {
+        start.saturating_sub(end.value)
+    } else {
+        end.saturating_sub(start)
+    };
+    //println!("dist: {}", dist);
+    if dist > max_dist {
+        Err(Located::new(
+            CodeGenError::MaxDistAssertionFailed(dist),
+            end.location,
+        ))
+    } else {
+        Ok(())
     }
-    output
 }
-// pub fn emit(format: Format, file_ext: Option<&str>, code: [u4; 256]) -> Vec<u8> {
-//     match format {
-//         Format::Hex => emit_hex(code),
-//         Format::Bin => emit_bin_packed(code),
-//         Format::Auto => emit(
-//             file_ext
-//                 .map(|ext| match ext {
-//                     "hex" => Some(Format::Hex),
-//                     "bin" => Some(Format::Bin),
-//                     _ => None,
-//                 })
-//                 .flatten()
-//                 .unwrap_or(Format::Bin),
-//             file_ext,
-//             code,
-//         ),
-//     }
-// }

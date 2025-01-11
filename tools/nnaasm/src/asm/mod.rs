@@ -129,7 +129,7 @@ impl<'a> AsmError<'a> {
             }
         }
         eprintln!(
-            "{COLOR_RED}{BOLD}error:{RESET} {}:{}{}\n{}",
+            "{COLOR_RED}{BOLD}error:{RESET} {}:{}:{}\n{}",
             self.filename, linenum, span.start, out
         )
     }
@@ -141,4 +141,104 @@ pub trait IntoAsmError {
 pub fn assemble(filename: Rc<str>, input: &str) -> Result<[u8; 256], AsmError> {
     let parsed = parse_lex(input).map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
     Ok(codegen::gen(parsed).map_err(|cg| cg.into_asm_error(&input, filename.clone()))?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Located;
+
+    fn assemble_assert(code: &str, bin: &[u8]) {
+        let mut full_bin = [0; 256];
+        full_bin[..bin.len()].copy_from_slice(bin);
+        match super::assemble("test".into(), code) {
+            Ok(gen_bin) => assert_eq!(gen_bin, full_bin),
+            Err(e) => {
+                e.print();
+                assert!(false)
+            }
+        }
+    }
+    fn assemble_assert_err(code: &str, err: Located<&str>) {
+        match super::assemble("test".into(), &code) {
+            Ok(_) => assert!(false, "An error should be thrown. but isn't"),
+            Err(e) => {
+                assert_eq!(e.message, err.value);
+                assert_eq!(e.location, err.location);
+            }
+        }
+    }
+    #[test]
+    fn full_test() {
+        let code = r#"
+.org 0x00
+
+lih 0x2
+lil 0x4
+mov r1 r0"#;
+
+        let mut bin = [0; 256];
+        bin[0] = 0x22;
+        bin[1] = 0x14;
+        bin[2] = 0x54;
+        assemble_assert(code, &[0x22, 0x14, 0x54]);
+    }
+
+    #[test]
+    fn org_overflow() {
+        let code = r#".org 0x10
+nop
+nop
+.org 0x11
+nop
+        "#;
+        assemble_assert_err(
+            code,
+            Located::new(
+                "This org (.org 0x11 ; size: 0x01) overlaps with: .org 0x10 ; size: 0x02",
+                (3, 0..9).into(),
+            ),
+        );
+    }
+
+    #[test]
+    fn max_dist_fail() {
+        let code = r#"
+.org 0x20
+nop
+nop
+nop
+nop
+nop
+.assert_max_dist 0x20 0x4
+"#;
+        assemble_assert_err(
+            code,
+            Located::new("Assertion failed. distance was 0x05", (7, 0..25).into()),
+        );
+    }
+
+    #[test]
+    fn max_dist_success() {
+        let code = r#"
+.org 0x20
+nop ; 0x20
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop ; 0x2A
+nop
+nop
+nop
+nop
+nop ; jmp
+.assert_max_dist 0x20 0x10
+"#;
+        assemble_assert(code, &[0; 0]);
+    }
 }

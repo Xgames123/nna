@@ -1,9 +1,10 @@
-.org 00
+
+.org 0x00
 lih &message.high
 mov r1 r0
 
-lil &screen_mem.low
-lih &screen_mem.high
+lil &video_mem.low
+lih &video_mem.high
 mov r3 r0 ; r3 target
 
 xor r0 r0 ; zero r0
@@ -20,14 +21,14 @@ inc r3
 clf
 bra &loop.low
 
-.org 10 ; make sure everything fits into 16 bytes because else branches can't be reached
+.org 0x10 ; make sure everything fits into 16 bytes because else branches can't be reached
 
 end:
 lil &end.low
 lih &end.high
 jmp r0
 
-.org 20
+.org 0x20
 
 message:
 0x48 ; H
@@ -46,5 +47,5 @@ message:
 0x00
 
 ; screen memory
-.org F5
-screen_mem:
+.org 0xF5
+video_mem:

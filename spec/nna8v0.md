@@ -56,7 +56,7 @@ Parameters that take a register are noted using: [description].
 | brk       | 0x0    |   01   |    00    | Break the debugger.                                                           |
 | flf       | 0x0    |   10   |    00    | Flips flag (if flag was set reset else set)                                   |
 | clf       | 0x0    |   11   |    00    | Clear flag                                                                    |
-| jmp       | 0x0    | [reg]  |    01    | Do a long jump to [addr] when the overflow flag is set                        |
+| jmp       | 0x0    | [reg]  |    01    | Do a long jump to [addr] when the overflow flag is not set                    |
 | inc       | 0x0    | [reg]  |    10    | Increment [reg] by 1                                                          |
 | dec       | 0x0    | [reg]  |    11    | Decrement [reg] by 1                                                          |
 | lil       | 0x1    | value  |  value   | Loads the immediate value into the low part of r0.                            |
@@ -64,10 +64,10 @@ Parameters that take a register are noted using: [description].
 | mwr       | 0x3    | [reg]  |  [addr]  | Writes [reg] to memory at [addr].                                             |
 | mrd       | 0x4    | [reg]  |  [addr]  | Reads the value at memory address [addr] into [reg].                          |
 | mov       | 0x5    | [dest] | [source] | Copies (moves) the value from [source] into [dest].                           |
-| bra       | 0x6    |  addr  |   addr   | Branch to addr when the overflow flag is set.                                 |
+| bra       | 0x6    |  addr  |   addr   | Branch to addr when the overflow flag is not set.                             |
 | rol       | 0x7    |  [a]   |   [b]    | Rotate [a] left by [b] bits                                                   |
-| eq        | 0x8    |  [a]   |   [b]    | Sets the overflow flag when [a] == [b]                                        |
-| gt        | 0x9    |  [a]   |   [b]    | Sets the overflow flag when [a] > [b]                                         |
+| eq        | 0x8    |  [a]   |   [b]    | Sets the overflow flag to the result of !([a] == [b])                         |
+| gt        | 0x9    |  [a]   |   [b]    | Sets the overflow flag to the result of !([a] > [b])                          |
 | add       | 0xa    |  [a]   |   [b]    | Adds [a] to the [b] and stores it to [a]. (Sets the overflow flag)            |
 | mul       | 0xB    |  [a]   |   [b]    | Multiplies [a] with [b] and store the result in [a]. (Sets the overflow flag) |
 | and       | 0xC    |  [a]   |   [b]    | and's [a] and [b] and stores the result in [a]                                |
