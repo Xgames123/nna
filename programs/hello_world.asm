@@ -12,7 +12,6 @@ loop:
 mrd r2 r1
 
 eq r2 r0 ; check if r2 is zero
-flf
 bra &end.low
 ; r2 is not 0
 mwr r2 r3
@@ -21,7 +20,7 @@ inc r3
 clf
 bra &loop.low
 
-.org 0x10 ; make sure everything fits into 16 bytes because else branches can't be reached
+.assert_max_dist 0x00 0x10
 
 end:
 brk
