@@ -24,6 +24,7 @@ bra &loop.low
 .org 0x10 ; make sure everything fits into 16 bytes because else branches can't be reached
 
 end:
+brk
 lil &end.low
 lih &end.high
 jmp r0

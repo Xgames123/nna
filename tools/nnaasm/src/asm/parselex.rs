@@ -75,7 +75,7 @@ impl RefType {
     pub fn mask_low(self, value: u8) -> u8 {
         match self {
             RefType::Low => value & 0x0F,
-            RefType::High => value & 0xF0 >> 4,
+            RefType::High => value >> 4 & 0x0F,
             RefType::Full => value,
         }
     }
