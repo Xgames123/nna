@@ -2,7 +2,7 @@
 
 ; push return addr on stack
 lih 0x2
-mov r0 r2 ; r2 stack_ptr addr
+mov r2 r0 ; r2 stack_ptr addr
 mrd r3 r0 ; r3: stack_ptr
 
 inc r3 ; make room on the stack
@@ -22,9 +22,7 @@ lih &print.high
 lil &print.low
 jmp r0
 ret:
-lih &program_end.high
-lil &program_end.low
-jmp r0
+brk
 
 
 .org 0x20 ; stack
@@ -57,11 +55,12 @@ mov r2 r0 ; r2 target_ptr
 loop:
   mrd r3 r1 ; r3: cur_char
   xor r0 r0
+  ;brk
   eq r0 r3
   bra &end.low .assert_max_dist 0x40 0x10
   clf
 
-  mwr r2 r3 ; write cur_char to target_ptr
+  mwr r3 r2 ; write cur_char to target_ptr
   inc r2 ; r2: target_ptr
   inc r1 ; r1: msg_ptr
   bra &loop.low .assert_max_dist 0x40 0x10
@@ -76,8 +75,5 @@ end:
 
   jmp r1 ; jmp to ret addr
 
-.org 0xF5
+.org 0xF0
 video_mem:
-
-.org 0xFF
-program_end:

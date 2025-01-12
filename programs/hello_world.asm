@@ -13,11 +13,11 @@ mrd r2 r1
 
 eq r2 r0 ; check if r2 is zero
 bra &end.low
+clf
 ; r2 is not 0
 mwr r2 r3
 inc r1
 inc r3
-clf
 bra &loop.low
 
 .assert_max_dist 0x00 0x10
@@ -47,5 +47,5 @@ message:
 0x00
 
 ; screen memory
-.org 0xF5
+.org 0xF0
 video_mem:
