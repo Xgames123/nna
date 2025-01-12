@@ -9,23 +9,9 @@ But the last 16 bytes are reserved for IO.
 | 00 -> EF   | ram rw   |
 | F0 -> FF   | io bank  |
 
-# IO memory range
-The IO memory range contains memory mapped peripherals.
-Which peripherals are available depends on the [chip variant](chip_variants.md)
-
-## Boot Dev
-All nna chips have the boot device at address 0xF0
-Reading/writing from the first byte reads/writes them to the device at the address pointed to by the 2 following bytes
-
-| size (bytes) | name                                                                                          |
-|--------------|-----------------------------------------------------------------------------------------------|
-| 1            | data to write to the device (when chip reads/writes here the action is started on the device) |
-| 2            | address to read/write from                                                                    |
-
-# Boot Sequence
-1. The first 16 bytes are copied from the boot device
-2. All registers and flags are reset to 0
-3. Execution begins at 0x00
+# IO bus
+The IO bus is mapped into memory at 0xF0 -> 0xFF.
+Which peripherals are available on the io bus depends on the [chip variant](chip_variants.md)
 
 # Flags
 There is 1 flag (overflow flag) that is set by some instructions when they overflow and used by branching instructions to conditionally branch.
