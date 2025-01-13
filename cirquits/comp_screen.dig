@@ -118,6 +118,11 @@
       <elementAttributes/>
       <pos x="400" y="380"/>
     </visualElement>
+    <visualElement>
+      <elementName>nna8v0.dig</elementName>
+      <elementAttributes/>
+      <pos x="800" y="480"/>
+    </visualElement>
   </visualElements>
   <wires>
     <wire>

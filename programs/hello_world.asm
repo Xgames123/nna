@@ -15,6 +15,7 @@ eq r2 r0 ; check if r2 is zero
 bra &end.low
 clf
 ; r2 is not 0
+;brk
 mwr r2 r3
 inc r1
 inc r3
