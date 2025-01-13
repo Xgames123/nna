@@ -1,13 +1,15 @@
 use std::{
+    fs::File,
+    io::Read,
     ops::{Deref, Range},
     rc::Rc,
 };
 
-use self::parselex::parse_lex;
+use self::lex::parse_lex;
 
 pub mod codegen;
-mod parselex;
-mod tokenizer;
+mod lex;
+mod parse;
 
 const COLOR_RED: &'static str = "\x1b[31m";
 const BOLD: &'static str = "\x1b[1m";
@@ -138,8 +140,56 @@ pub trait IntoAsmError {
     fn into_asm_error<'a>(self, code: &'a str, filename: Rc<str>) -> AsmError<'a>;
 }
 
+fn io_to_asm_err<'a>(
+    io: std::io::Error,
+    location: Location,
+    code: &'a str,
+    filename: Rc<str>,
+) -> AsmError<'a> {
+    let message = match io.kind() {
+        std::io::ErrorKind::NotFound => "File not found".to_string(),
+        _ => {
+            format!("io error: {}", io)
+        }
+    };
+    AsmError {
+        filename,
+        code,
+        location: location,
+        message,
+    }
+}
+
+fn resolve_includes<'a>(
+    tokens: &mut Vec<Located<lex::Token>>,
+    code: &'a str,
+    filename: Rc<str>,
+) -> Result<(), AsmError<'a>> {
+    for token in tokens.iter_mut() {
+        match &token.value {
+            lex::Token::IncludeBytes(path) => {
+                let mut file = File::open(path).map_err(|e| {
+                    io_to_asm_err(e, token.location.clone(), code, filename.clone())
+                })?;
+                let mut buffer = Vec::new();
+                file.read_to_end(&mut buffer).map_err(|e| {
+                    io_to_asm_err(e, token.location.clone(), code, filename.clone())
+                })?;
+                let _ = std::mem::replace(
+                    token,
+                    Located::new(lex::Token::Bytes(buffer), token.location.clone()),
+                );
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 pub fn assemble(filename: Rc<str>, input: &str) -> Result<[u8; 256], AsmError> {
-    let parsed = parse_lex(input).map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
+    let mut parsed =
+        parse_lex(input).map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
+    resolve_includes(&mut parsed, &input, filename.clone())?;
     Ok(codegen::gen(parsed).map_err(|cg| cg.into_asm_error(&input, filename.clone()))?)
 }
 

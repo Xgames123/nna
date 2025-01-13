@@ -1,6 +1,8 @@
 use std::borrow::Cow;
+use std::path::PathBuf;
+use std::str::FromStr;
 
-use super::tokenizer::Tokenizer;
+use super::parse::Parser;
 use super::{IntoAsmError, Located, Location};
 use libnna::OpCode;
 use libnna::{u2, u4, ArgOpTy};
@@ -98,6 +100,8 @@ pub enum Token {
     Org(u8),
     Value(ValueToken<u8>),
     AssertMaxDist(ValueToken<u8>, u8),
+    IncludeBytes(PathBuf),
+    Bytes(Vec<u8>),
     Op(OpToken),
 }
 impl Token {
@@ -187,7 +191,7 @@ fn parse_value<T: UnsignedNum>(
     Ok(None)
 }
 
-fn parse_next_hex8(parser: &mut Tokenizer) -> Result<u8> {
+fn parse_next_hex8(parser: &mut Parser) -> Result<u8> {
     let token = parser.next_same_line_or_err(Cow::Borrowed(
         "Expected an 8 bit constant value after this.",
     ))?;
@@ -205,7 +209,7 @@ fn parse_next_hex8(parser: &mut Tokenizer) -> Result<u8> {
     Ok(Located::new(value, parser.location()))
 }
 
-fn parse_next_value<T: UnsignedNum>(parser: &mut Tokenizer) -> Result<ValueToken<T>> {
+fn parse_next_value<T: UnsignedNum>(parser: &mut Parser) -> Result<ValueToken<T>> {
     let token = parser.next_same_line_or_err(Cow::Owned(format!(
         "Expected an {} bit value after this.",
         T::THEORETICAL_SIZE
@@ -218,8 +222,10 @@ fn parse_next_value<T: UnsignedNum>(parser: &mut Tokenizer) -> Result<ValueToken
         )),
     }
 }
-fn parse_next_reg(parser: &mut Tokenizer) -> Result<u2> {
-    let token = parser.next_same_line_or_err(Cow::Borrowed("Expected a register after this."))?;
+fn parse_next_reg(parser: &mut Parser) -> Result<u2> {
+    let token = parser.next_same_line_or_err(Cow::Borrowed(
+        "Expected a register after this. Found end of file",
+    ))?;
     match token {
         "r0" => Ok(Located::new(u2::ZERO, parser.location())),
         "r1" => Ok(Located::new(u2::ONE, parser.location())),
@@ -232,7 +238,27 @@ fn parse_next_reg(parser: &mut Tokenizer) -> Result<u2> {
     }
 }
 
-fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<Token> {
+fn parse_next_str<'a>(parser: &'a mut Parser) -> Result<&'a str> {
+    let token = parser.next_same_line_or_err(Cow::Borrowed(
+        "Expected a string literal after this. Found end of file",
+    ))?;
+    if !token.starts_with("\"") {
+        return Err(LexError::static_located(
+            "Expected a string literal.",
+            parser.location(),
+        ));
+    }
+    if !token.ends_with("\"") {
+        return Err(LexError::static_located(
+            "String doesn't have an ending '\"'",
+            parser.location(),
+        ));
+    }
+
+    Ok(Located::new(token, parser.location()))
+}
+
+fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<Token> {
     let token_loc = parser.location();
     match token {
         "org" => {
@@ -251,6 +277,14 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Tokenizer) -> Resul
                 token_loc.combine(dist.location),
             ));
         }
+        "include_bytes" => {
+            let path_str = parse_next_str(parser)?;
+            let path = PathBuf::from_str(&path_str).unwrap();
+            return Ok(Located::new(
+                Token::IncludeBytes(path),
+                token_loc.combine(parser.location()),
+            ));
+        }
         _ => {
             return Err(LexError::static_located(
                 "Unknown compiler directive",
@@ -260,7 +294,7 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Tokenizer) -> Resul
     }
 }
 
-fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
+fn parse_op<'a>(token: &'a str, parser: &mut Parser) -> Result<OpToken> {
     let op = OpCode::try_from_str(token).ok_or(LexError::static_located(
         "Unknown operation. See spec for available operations",
         parser.location(),
@@ -314,7 +348,7 @@ fn parse_op<'a>(token: &'a str, parser: &mut Tokenizer) -> Result<OpToken> {
 
 pub fn parse_lex(input: &str) -> std::result::Result<Vec<Located<Token>>, Located<LexError>> {
     let mut out_vec = Vec::new();
-    let Some(mut parser) = Tokenizer::new(input) else {
+    let Some(mut parser) = Parser::new(input) else {
         return Ok(out_vec);
     };
 

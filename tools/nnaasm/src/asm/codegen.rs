@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Display, ops::Range, rc::Rc};
 use libnna::u4;
 
 use super::{
-    parselex::{OpToken, RefType, Token, ValueToken8},
+    lex::{OpToken, RefType, Token, ValueToken8},
     IntoAsmError, Located, Location,
 };
 
@@ -206,6 +206,12 @@ pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> 
                         assert_max_dists.push((end, label, ref_type, dist));
                     }
                 }
+            }
+            Token::Bytes(bytes) => {
+                data.extend_from_slice(&bytes);
+            }
+            Token::IncludeBytes(_) => {
+                panic!("codegen can't work with include_bytes tokens");
             }
         }
     }
