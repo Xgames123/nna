@@ -1,6 +1,7 @@
 [workspace]
 resolver="2"
 members = [
-    "libnna",
-    "nnaasm",
+  "compress",
+  "libnna",
+  "nnaasm",
 ]
