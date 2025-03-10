@@ -1,0 +1,13 @@
+.org 0x00
+
+
+
+
+
+.org 0xE0
+  paddle1: 0x00
+  paddle2: 0x00
+
+; screen memory
+.org 0xF0
+video_mem:
