@@ -1,18 +1,5 @@
 # nna8v1
 
-# Memory
-The total address range is 256 bytes.
-But the last 16 bytes are reserved for IO.
-
-| addr range | function |
-|------------|----------|
-| 00 -> EF   | ram rw   |
-| F0 -> FF   | io bank  |
-
-# IO bus
-The IO bus is mapped into memory at 0xF0 -> 0xFF.
-Which peripherals are available on the io bus depends on the [chip variant](chip_variants.md)
-
 # Flags
 There is 1 flag (overflow flag) that is set by some instructions when they overflow and used by branching instructions to conditionally branch.
 
