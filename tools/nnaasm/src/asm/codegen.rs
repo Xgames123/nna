@@ -175,7 +175,7 @@ pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> 
                     (label_ref, cur_org_addr + data.len() as u8, ref_type),
                     token.location,
                 ));
-                data.push(instruct.into_high());
+                data.push(instruct);
             }
             Token::Value(ValueToken8::Const(value)) => data.push(value),
             Token::Value(ValueToken8::LabelRef(name, ref_type)) => {

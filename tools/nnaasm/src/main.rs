@@ -1,4 +1,5 @@
 use clap::{Parser, ValueEnum};
+use libnna::InstructionSet;
 use std::{
     ffi::OsStr,
     fs,
@@ -23,6 +24,10 @@ struct Cli {
     /// Input file or - to read from stdin
     #[arg(default_value = "-")]
     input: String,
+
+    /// The instruction set to compile for
+    #[arg(short = 's', long, default_value = "nna8v1")]
+    iset: InstructionSet,
 
     /// Output file
     #[arg(short = 'o', long, default_value = "out.bin")]
@@ -121,7 +126,7 @@ fn main() {
         die!("Failed to read '{}'\n{}", cli.input, err);
     });
 
-    let output = match asm::assemble(filename.into(), &input_data) {
+    let output = match asm::assemble(filename.into(), &input_data, cli.iset) {
         Ok(out) => out,
         Err(err) => {
             err.print();

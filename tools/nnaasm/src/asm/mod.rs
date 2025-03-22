@@ -5,6 +5,8 @@ use std::{
     rc::Rc,
 };
 
+use libnna::InstructionSet;
+
 use self::lex::parse_lex;
 
 pub mod codegen;
@@ -186,21 +188,27 @@ fn resolve_includes<'a>(
     Ok(())
 }
 
-pub fn assemble(filename: Rc<str>, input: &str) -> Result<[u8; 256], AsmError> {
+pub fn assemble(
+    filename: Rc<str>,
+    input: &str,
+    iset: InstructionSet,
+) -> Result<[u8; 256], AsmError> {
     let mut parsed =
-        parse_lex(input).map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
+        parse_lex(input, iset).map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
     resolve_includes(&mut parsed, &input, filename.clone())?;
     Ok(codegen::gen(parsed).map_err(|cg| cg.into_asm_error(&input, filename.clone()))?)
 }
 
 #[cfg(test)]
 mod tests {
+    use libnna::InstructionSet;
+
     use super::Located;
 
     fn assemble_assert(code: &str, bin: &[u8]) {
         let mut full_bin = [0; 256];
         full_bin[..bin.len()].copy_from_slice(bin);
-        match super::assemble("test".into(), code) {
+        match super::assemble("test".into(), code, InstructionSet::Nna8v1) {
             Ok(gen_bin) => assert_eq!(gen_bin, full_bin),
             Err(e) => {
                 e.print();
@@ -209,7 +217,7 @@ mod tests {
         }
     }
     fn assemble_assert_err(code: &str, err: Located<&str>) {
-        match super::assemble("test".into(), &code) {
+        match super::assemble("test".into(), &code, InstructionSet::Nna8v1) {
             Ok(_) => assert!(false, "An error should be thrown. but isn't"),
             Err(e) => {
                 assert_eq!(e.message, err.value);

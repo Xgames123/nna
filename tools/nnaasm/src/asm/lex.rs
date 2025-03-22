@@ -4,8 +4,7 @@ use std::str::FromStr;
 
 use super::parse::Parser;
 use super::{IntoAsmError, Located, Location};
-use libnna::OpCode;
-use libnna::{u2, u4, ArgOpTy};
+use libnna::{u2, u4, InstructionSet, Op, OpArgs};
 
 type Result<T> = std::result::Result<Located<T>, Located<LexError>>;
 
@@ -91,7 +90,7 @@ impl RefType {
 #[derive(Debug, Clone)]
 pub enum OpToken {
     Full(u8),
-    LabelRef(u4, Box<str>, RefType),
+    LabelRef(u8, Box<str>, RefType),
 }
 
 #[derive(Debug, Clone)]
@@ -294,51 +293,42 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
     }
 }
 
-fn parse_op<'a>(token: &'a str, parser: &mut Parser) -> Result<OpToken> {
-    let op = OpCode::try_from_str(token).ok_or(LexError::static_located(
+fn parse_op<'a>(token: &'a str, iset: InstructionSet, parser: &mut Parser) -> Result<OpToken> {
+    let (op, args) = Op::try_from_str(token, iset).ok_or(LexError::static_located(
         "Unknown operation. See spec for available operations",
         parser.location(),
     ))?;
     let loc = parser.location();
-    Ok(match op.arg_types() {
-        ArgOpTy::None(bits) => Located::new(
-            OpToken::Full(op.opcode().into_high() | bits.into_low()),
-            loc,
-        ),
-        ArgOpTy::Bit4(_arg_name) => {
+    Ok(match args {
+        OpArgs::None => Located::new(OpToken::Full(op.into_u8()), loc),
+        OpArgs::Bit4(_) => {
             let value = parse_next_value::<u4>(parser)?;
             let token = match value.value {
-                ValueToken4::Const(value) => {
-                    OpToken::Full(op.opcode().into_high() | value.into_low())
-                }
+                ValueToken4::Const(value) => OpToken::Full(op.into_u8() | value.into_low()),
                 ValueToken4::LabelRef(name, ref_type) => {
                     if ref_type.is_full() {
                         return Err(LexError::static_located("Cant fit a full sized reference (8 bits) into 4 bits. Use .low or .high sufix to get the low or high part of the reference.", parser.location()));
                     }
-                    OpToken::LabelRef(op.opcode(), name, ref_type)
+                    OpToken::LabelRef(op.into_u8(), name, ref_type)
                 }
             };
             Located::new(token, loc.combine(value.location))
         }
-        ArgOpTy::OneReg(_arg_name, bits) => {
+        OpArgs::OneReg(_) => {
             let register = parse_next_reg(parser)?;
 
             Located::new(
-                OpToken::Full(
-                    op.opcode().into_high() | (register.value.into_low() << 2) | bits.into_low(),
-                ),
+                OpToken::Full(op.into_u8() | (register.value.into_low() << 2)),
                 loc.combine(register.location),
             )
         }
-        ArgOpTy::TowReg(_arg0_name, _arg1_name) => {
+        OpArgs::TowReg(_arg0_name, _arg1_name) => {
             let register0 = parse_next_reg(parser)?;
             let register1 = parse_next_reg(parser)?;
 
             Located::new(
                 OpToken::Full(
-                    op.opcode().into_high()
-                        | register0.value.into_low() << 2
-                        | register1.value.into_low(),
+                    op.into_u8() | register0.value.into_low() << 2 | register1.value.into_low(),
                 ),
                 loc.combine(register0.location).combine(register1.location),
             )
@@ -346,7 +336,10 @@ fn parse_op<'a>(token: &'a str, parser: &mut Parser) -> Result<OpToken> {
     })
 }
 
-pub fn parse_lex(input: &str) -> std::result::Result<Vec<Located<Token>>, Located<LexError>> {
+pub fn parse_lex(
+    input: &str,
+    iset: InstructionSet,
+) -> std::result::Result<Vec<Located<Token>>, Located<LexError>> {
     let mut out_vec = Vec::new();
     let Some(mut parser) = Parser::new(input) else {
         return Ok(out_vec);
@@ -378,6 +371,6 @@ pub fn parse_lex(input: &str) -> std::result::Result<Vec<Located<Token>>, Locate
             continue;
         }
 
-        out_vec.push(parse_op(token, &mut parser)?.map(|opt| Token::Op(opt)));
+        out_vec.push(parse_op(token, iset, &mut parser)?.map(|opt| Token::Op(opt)));
     }
 }

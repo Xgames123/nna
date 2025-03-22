@@ -30,8 +30,8 @@ Parameters that take a register are noted using: [description].
 | flf  | 0x0    |   10   |    00    | Flips flag (if flag was set reset else set)                    | 1      | write         |
 | clf  | 0x0    |   11   |    00    | Clear flag                                                     | 1      | write         |
 | jmp  | 0x0    | [reg]  |    01    | Do a long jump to [addr] when the overflow flag is **not** set | 1      | skip when set |
-| inc  | 0x0    | [reg]  |    10    | Increment [reg] by 1                                           | 1      | /             |
-| dec  | 0x0    | [reg]  |    11    | Decrement [reg] by 1                                           | 1      | /             |
+| inc  | 0x0    | [reg]  |    10    | Increment [reg] by 1                                           | 1      | overflow      |
+| dec  | 0x0    | [reg]  |    11    | Decrement [reg] by 1                                           | 1      | overflow      |
 | lil  | 0x1    | value  |  value   | Loads the immediate value into the low part of r0.             | 1      | /             |
 | lih  | 0x2    | value  |  value   | Loads the immediate value into the high part of r0.            | 1      | /             |
 | mwr  | 0x3    | [reg]  |  [addr]  | Writes [reg] to memory at [addr].                              | 2      | /             |

@@ -1,5 +1,5 @@
 mod usmol;
-use std::fmt::Display;
+use std::{fmt::Display, marker::PhantomData, ops::Deref};
 
 pub use usmol::*;
 
@@ -21,17 +21,21 @@ impl Reg {
 }
 
 ///Argument type of an operation
-pub enum ArgOpTy {
-    None(u4),
-    OneReg(&'static str, u2),
+pub enum OpArgs {
+    ///No arguments
+    None,
+    /// 1 register as arguments
+    OneReg(&'static str),
+    /// 2 registers as arguments
     TowReg(&'static str, &'static str),
+    /// 1 argument that is a 4 bit value
     Bit4(&'static str),
 }
-impl Display for ArgOpTy {
+impl Display for OpArgs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::None(_) => {}
-            Self::OneReg(name, _) => {
+            Self::None => {}
+            Self::OneReg(name) => {
                 f.write_str("[")?;
                 f.write_str(name)?;
                 f.write_str("]")?
@@ -55,60 +59,101 @@ impl Display for ArgOpTy {
 }
 
 macro_rules! opargs {
-    (($desc:literal:reg),$arg:expr) => {
-        ArgOpTy::OneReg($desc, u2::from_low($arg))
+    (($desc:literal:reg)) => {
+        OpArgs::OneReg($desc)
     };
-    (($desc1:literal:reg, $desc2:literal:reg),$arg:expr) => {
-        ArgOpTy::TowReg($desc1, $desc2)
+    (($desc1:literal:reg, $desc2:literal:reg)) => {
+        OpArgs::TowReg($desc1, $desc2)
     };
-    (($desc:literal:4bit),$arg:expr) => {
-        ArgOpTy::Bit4($desc)
+    (($desc:literal:4bit)) => {
+        OpArgs::Bit4($desc)
     };
-    ((),$arg:expr) => {
-        ArgOpTy::None(u4::from_low($arg))
+    (()) => {
+        OpArgs::None
     };
 }
 
-macro_rules! ops {
-    ($vis:vis $name:ident{$($opname:literal:$opcode:literal$arg:tt),*}) => {
-        $vis struct $name(u8);
-        impl $name{
-            pub fn opcode(&self) -> u4{
-                u4::from_high(self.0)
-            }
-            pub fn arg_types(&self) -> ArgOpTy{
-                match self.0{
-                    $($opcode => (opargs!($arg,self.0))),*,
-                    _=>unreachable!(),
+macro_rules! instruction_sets {
+    ($($iset:ident{$($name:literal:$opcode:literal$args:tt),*})*) => {
+        #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+        #[derive(Copy, Clone)]
+        pub enum InstructionSet {
+            $($iset),*
+        }
+
+        #[derive(Clone, Copy)]
+        pub struct Op(u8, InstructionSet);
+
+        impl Op {
+            pub fn try_from_str(string: &str, iset: InstructionSet) -> Option<(Self,OpArgs)> {
+                if string.starts_with("?"){
+                    return None;
                 }
+                match iset {
+                    $(
+                        InstructionSet::$iset =>
+                            match string {
+                                $(
+                                    $name => Some((Self($opcode, iset),opargs!($args))),
+                                )*
+                                _=>{None}
+                            }
+
+
+                    ),*
+                }
+            }
+            pub fn args(self) -> OpArgs {
+                match self.1{
+                $(
+                    InstructionSet::$iset =>
+                    match self.0 {
+                        $(
+                            $opcode => opargs!($args),
+                        )*
+                            _=>unreachable!()
+                    }
+
+                ),*}
 
             }
-            pub fn try_from_str(string: &str) -> Option<Self>{
-                match string{
-                    $($opname => Some($name($opcode))),*,
-                    _=>None,
-                }
-            }
-            pub fn opname(&self) -> &'static str{
-                match self.0{
-                    $($opcode => $opname),*,
-                    _=>unreachable!(),
-                }
-            }
-        }
-        impl Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let arg = self.arg_types();
-                f.write_str(self.opname())?;
-                f.write_str(" ")?;
-                arg.fmt(f)?;
-                Ok(())
+            pub fn opname(self) -> &'static str {
+                match self.1{
+                $(
+                    InstructionSet::$iset =>
+                    match self.0 {
+                        $(
+                            $opcode => $name,
+                        )*
+                            _=>{"?"}
+                    }
+
+                ),*}
             }
         }
+
     };
 }
-ops! {
-    pub OpCode{
+impl Op {
+    pub fn into_u8(self) -> u8 {
+        self.0
+    }
+}
+impl Into<u8> for Op {
+    fn into(self) -> u8 {
+        self.0
+    }
+}
+impl Display for Op {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.opname())?;
+        f.write_str(" ")?;
+        self.args().fmt(f)
+    }
+}
+
+instruction_sets! {
+    Nna8v1 {
         "nop":0x00(),
         "brk":0x04(),
         "flf":0x08(),
@@ -131,6 +176,47 @@ ops! {
         "and":0xC0("source":reg, "a":reg),
         "nand":0xD0("source":reg, "a":reg),
         "or" :0xE0("source":reg, "a":reg),
+        "xor":0xF0("source":reg, "a":reg)
+    }
+
+    Nna8v2 {
+        "nop":0x00(),
+        "brk":0x04(),
+        "flf":0x08(),
+        "clf":0x0C(),
+        "jmp":0x01("addr":reg),
+        "inc":0x02("reg":reg),
+        "dec":0x03("reg":reg),
+
+        "lil":0x10("value":4bit),
+        "lih":0x20("value":4bit),
+        "mwr":0x30("reg":reg,"addr":reg),
+        "mrd":0x40("reg":reg,"addr":reg),
+        "mov":0x50("dest":reg, "source":reg),
+        "bra":0x60("addr":4bit),
+        "add":0x70(),
+        "sub":0x71(),
+        "div":0x72(),
+        "mul":0x73(),
+        "shl":0x74(),
+        "shr":0x75(),
+        "rol":0x76(),
+        "ror":0x77(),
+        "and":0x78(),
+        "or": 0x79(),
+        "not":0x7A(),
+        // "?": 0x7B(),
+        // "?": 0x7C(),
+        // "?": 0x7D(),
+        // "?": 0x7E(),
+        // "?": 0x7F(),
+        "eq": 0x80("a":reg, "b":reg),
+        "gt": 0x90("a":reg, "b":reg),
+        "cal":0xA0("a":reg, "b":reg),
+        // "?": 0xB0("source":reg, "a":reg),
+        // "?": 0xC0("source":reg, "a":reg),
+        // "?": 0xD0("source":reg, "a":reg),
+        "sbs":0xE0("bank":reg),
         "xor":0xF0("source":reg, "a":reg)
     }
 }

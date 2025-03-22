@@ -10,5 +10,5 @@ edition = "2021"
 [dependencies]
 log = {version="0.4.21"}
 clap = { version = "4.5.3", features = ["derive"] }
-libnna = {path="../libnna"}
+libnna = {path="../libnna", features=["clap"]}
 stderrlog={version="0.6.0"}
