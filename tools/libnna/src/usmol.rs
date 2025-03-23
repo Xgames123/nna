@@ -1,5 +1,21 @@
 use core::fmt;
-use std::fmt::LowerHex;
+use std::{
+    error::Error,
+    fmt::{Display, LowerHex},
+};
+
+#[derive(Debug, Copy, Clone)]
+pub struct TryFromIntError;
+impl Display for TryFromIntError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("out of range integral type conversion attempted")
+    }
+}
+impl Error for TryFromIntError {
+    fn description(&self) -> &str {
+        "out of range integral type conversion attempted"
+    }
+}
 
 #[macro_export]
 macro_rules! u2 {
@@ -30,6 +46,16 @@ impl u2 {
         self.0 << 6
     }
 }
+impl TryFrom<usize> for u2 {
+    type Error = TryFromIntError;
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        if value <= 3 {
+            Ok(u2(value as u8))
+        } else {
+            Err(TryFromIntError)
+        }
+    }
+}
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -38,6 +64,7 @@ pub struct u4(u8);
 impl u4 {
     pub const ZERO: u4 = u4::from_low(0x00);
     pub const ONE: u4 = u4::from_low(0x01);
+    pub const MAX: u4 = u4::from_low(0x0F);
 
     #[inline]
     pub const fn from_u32(val: u32) -> Self {
@@ -82,6 +109,16 @@ impl u4 {
     #[inline]
     pub fn overflowing_mul(self, other: u4) -> u4 {
         Self::from_low(self.0.overflowing_mul(other.0).0)
+    }
+}
+impl TryFrom<usize> for u4 {
+    type Error = TryFromIntError;
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        if value <= Self::MAX.0 as usize {
+            Ok(u4(value as u8))
+        } else {
+            Err(TryFromIntError)
+        }
     }
 }
 impl LowerHex for u4 {

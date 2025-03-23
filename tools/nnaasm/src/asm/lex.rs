@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::ops::AddAssign;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -7,54 +8,6 @@ use super::{IntoAsmError, Located, Location};
 use libnna::{u2, u4, InstructionSet, Op, OpArgs};
 
 type Result<T> = std::result::Result<Located<T>, Located<LexError>>;
-
-pub trait UnsignedNum
-where
-    Self: Sized,
-{
-    const THEORETICAL_SIZE: usize;
-    fn parse_hex(str: &str) -> Option<Self>;
-}
-impl UnsignedNum for u8 {
-    const THEORETICAL_SIZE: usize = 8;
-
-    fn parse_hex(str: &str) -> Option<Self> {
-        if str.len() > 2 {
-            return None;
-        }
-
-        u8::from_str_radix(str, 16).ok()
-    }
-}
-impl UnsignedNum for u4 {
-    const THEORETICAL_SIZE: usize = 4;
-
-    fn parse_hex(str: &str) -> Option<Self> {
-        if str.len() != 1 {
-            return None;
-        }
-        for char in str.chars() {
-            return char.to_digit(16).map(|val| u4::from_u32(val));
-        }
-        return None;
-    }
-}
-impl UnsignedNum for u2 {
-    const THEORETICAL_SIZE: usize = 2;
-
-    fn parse_hex(str: &str) -> Option<Self> {
-        if str.len() != 1 {
-            return None;
-        }
-        match str {
-            "0" => Some(u2::ZERO),
-            "1" => Some(u2::ONE),
-            "2" => Some(u2::TOW),
-            "3" => Some(u2::THREE),
-            _ => None,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum ValueToken<T: UnsignedNum> {
@@ -98,7 +51,7 @@ pub enum Token {
     LabelDef(Box<str>),
     Org(u8),
     Value(ValueToken<u8>),
-    AssertMaxDist(ValueToken<u8>, u8),
+    Reachable(ValueToken<u8>),
     IncludeBytes(PathBuf),
     Bytes(Vec<u8>),
     Op(OpToken),
@@ -267,13 +220,12 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
                 token_loc.combine(addr.location),
             ));
         }
-        "assert_max_dist" => {
+        "reachable" => {
             let start = parse_next_value::<u8>(parser)?;
-            let dist = parse_next_hex8(parser)?;
 
             return Ok(Located::new(
-                Token::AssertMaxDist(start.value, dist.value),
-                token_loc.combine(dist.location),
+                Token::Reachable(start.value),
+                token_loc.combine(start.location),
             ));
         }
         "include_bytes" => {

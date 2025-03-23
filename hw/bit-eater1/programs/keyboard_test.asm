@@ -9,8 +9,11 @@ xor r3 r3
 loop:
 brk
 mrd r2 r1
-eq r2 r3 ;  check if r2 is 0
+;eq r2 r3 ;  check if r2 is 0
+dec r2
+flf
 bra &loop.low .assert_max_dist &loop 0x10
+inc r2
 mwr r2 r0
 clf
 bra &loop.low .assert_max_dist &loop 0x10

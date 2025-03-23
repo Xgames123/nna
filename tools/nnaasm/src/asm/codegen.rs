@@ -11,7 +11,7 @@ pub enum CodeGenError {
     NoOrg(),
     OrgOverlap(Org, Org),
     LabelNotDefined(Box<str>),
-    MaxDistAssertionFailed(u8),
+    ReachableAssertionFailed,
 }
 impl IntoAsmError for Located<CodeGenError> {
     fn into_asm_error<'a>(self, code: &'a str, filename: Rc<str>) -> super::AsmError<'a> {
@@ -23,8 +23,8 @@ impl IntoAsmError for Located<CodeGenError> {
             CodeGenError::OrgOverlap(org0, org1) => {
                 format!("This org ({}) overlaps with: {}", org0, org1)
             },
-            CodeGenError::MaxDistAssertionFailed(size) => {
-                format!("Assertion failed. distance was {:#04x}", size)
+            CodeGenError::ReachableAssertionFailed => {
+                format!("Address is not reachable from here.")
             }
         };
         super::AsmError {
@@ -148,7 +148,7 @@ fn resolve_labels(
 pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> {
     let mut bin = [0; 256];
     let mut label_refs = Vec::new();
-    let mut assert_max_dists = Vec::new();
+    let mut reachable_checks = Vec::new();
     let mut orgs = Vec::new();
     let mut labels = HashMap::new();
 
@@ -195,15 +195,15 @@ pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> 
                 cur_org_loc = token.location;
                 cur_org_addr = addr;
             }
-            Token::AssertMaxDist(start, dist) => {
+            Token::Reachable(start) => {
                 let end = Located::new(
                     cur_org_addr.saturating_add(data.len() as u8),
                     token.location,
                 );
                 match start {
-                    ValueToken8::Const(start) => assert_max_dist(end, start, dist)?,
+                    ValueToken8::Const(start) => check_reachable(end, start)?,
                     ValueToken8::LabelRef(label, ref_type) => {
-                        assert_max_dists.push((end, label, ref_type, dist));
+                        reachable_checks.push((end, label, ref_type));
                     }
                 }
             }
@@ -218,12 +218,12 @@ pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> 
     //write last org
     Org::write(cur_org_addr, cur_org_loc, &data, &mut bin, &orgs)?;
 
-    for (end, label, ref_type, max_dist) in assert_max_dists.drain(..) {
+    for (end, label, ref_type) in reachable_checks.drain(..) {
         let resolved = resolve_label(
             &labels,
             Located::new((label, ref_type), end.location.clone()),
         )?;
-        assert_max_dist(end, resolved, max_dist)?;
+        check_reachable(end, resolved)?;
     }
 
     resolve_labels(&mut bin, labels, label_refs)?;
@@ -231,16 +231,10 @@ pub fn gen(tt: Vec<Located<Token>>) -> Result<[u8; 256], Located<CodeGenError>> 
     Ok(bin)
 }
 
-fn assert_max_dist(end: Located<u8>, start: u8, max_dist: u8) -> Result<(), Located<CodeGenError>> {
-    let dist = if start > end.value {
-        start.saturating_sub(end.value)
-    } else {
-        end.saturating_sub(start)
-    };
-    //println!("dist: {}", dist);
-    if dist > max_dist {
+fn check_reachable(end: Located<u8>, start: u8) -> Result<(), Located<CodeGenError>> {
+    if end.value & 0xF0 != start & 0xF0 {
         Err(Located::new(
-            CodeGenError::MaxDistAssertionFailed(dist),
+            CodeGenError::ReachableAssertionFailed,
             end.location,
         ))
     } else {

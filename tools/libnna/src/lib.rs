@@ -1,6 +1,8 @@
+mod extra_number_traits;
 mod usmol;
 use std::{fmt::Display, marker::PhantomData, ops::Deref};
 
+pub use extra_number_traits::*;
 pub use usmol::*;
 
 pub enum Reg {
@@ -174,7 +176,7 @@ instruction_sets! {
         "add":0xA0("source":reg, "a":reg),
         "mul":0xB0("source":reg, "a":reg),
         "and":0xC0("source":reg, "a":reg),
-        "nand":0xD0("source":reg, "a":reg),
+        "not":0xD0("a":reg, "b":reg),
         "or" :0xE0("source":reg, "a":reg),
         "xor":0xF0("source":reg, "a":reg)
     }
