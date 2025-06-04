@@ -19,10 +19,11 @@ The flag is a bit that gets set or reset by some instructions (during overflow, 
 | *r3*  | 8    | General purpose                                       | yes       |
 | *pc*  | 8    | Program counter                                       | no        |
 | *cop* | 4    | Current calc operation, Used by cal instruction.      | no        |
-| *bs*  | 8    | Current bank.                                         | no        |
+| *db*  | 8    | Current bank.                                         | mdb       |
+| *pb*  | 8    | Program bank.                                         | mpb       |
 
 # Banks
-The bank select register (*bs*) is used to select on which bank mwr and mrd instructions operate. Note: Only the first bank is executable and the last bank is reserved for IO.
+The data bank select register (*db*) is used to select on which bank mwr and mrd instructions operate. Note: Only the first bank is executable and the last bank is reserved for IO.
 
 # Instructions
 Instructions are 1 byte where the first 4 bits are the opcode followed by 2 arguments each 2 bits.
@@ -65,7 +66,10 @@ Parameters that take a register are noted using: [description].
 | ?    | 0xB    |  [a]   |   [b]    | unused                                                                            | 1      | /             |
 | ?    | 0xC    |  [a]   |   [b]    | unused                                                                            | 1      | /             |
 | ?    | 0xD    |  [a]   |   [b]    | unused                                                                            | 1      | /             |
-| sbs  | 0xE    |   00   |  [bank]  | Store [bank] into the *bs* register                                               | 1      | /             |
+| mdb  | 0xE    |   00   |  [bank]  | Move [bank] into the *db* register                                                | 1      | /             |
+| mpb  | 0xE    |   01   |  [bank]  | Move [bank] into the *pb* register                                                | 1      | /             |
+| ?    | 0xE    |   10   |  [bank]  | unused                                                                            | 1      | /             |
+| ?    | 0xE    |   11   |  [bank]  | unused                                                                            | 1      | /             |
 | xor  | 0xF    |  [a]   |   [b]    | xor's [a] and [b] and stores the result in [a].                                   | 1      | /             |
 
 
