@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use libnna::InstructionSet;
+use libnna::{instruction_sets::Nna8v1, InstructionSet};
 
 use self::lex::parse_lex;
 
@@ -193,8 +193,10 @@ pub fn assemble(
     input: &str,
     iset: InstructionSet,
 ) -> Result<[u8; 256], AsmError> {
-    let mut parsed =
-        parse_lex(input, iset).map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
+    let mut parsed = match iset {
+        InstructionSet::Nna8v1 => parse_lex::<Nna8v1>(input),
+    }
+    .map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
     resolve_includes(&mut parsed, &input, filename.clone())?;
     Ok(codegen::gen(parsed).map_err(|cg| cg.into_asm_error(&input, filename.clone()))?)
 }

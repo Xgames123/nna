@@ -111,10 +111,10 @@ impl u4 {
         Self::from_low(self.0.overflowing_mul(other.0).0)
     }
 }
-impl TryFrom<usize> for u4 {
+impl TryFrom<u64> for u4 {
     type Error = TryFromIntError;
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        if value <= Self::MAX.0 as usize {
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        if value <= Self::MAX.0 as u64 {
             Ok(u4(value as u8))
         } else {
             Err(TryFromIntError)

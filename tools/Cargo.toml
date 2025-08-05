@@ -4,3 +4,7 @@ members = [
   "libnna",
   "nnaasm",
 ]
+
+[workspace.package]
+authors =["ldev <ldev@ldev.eu.org>"]
+edition = "2021"

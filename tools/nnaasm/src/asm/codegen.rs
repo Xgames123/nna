@@ -1,7 +1,5 @@
 use std::{collections::HashMap, fmt::Display, ops::Range, rc::Rc};
 
-use libnna::u4;
-
 use super::{
     lex::{OpToken, RefType, Token, ValueToken8},
     IntoAsmError, Located, Location,

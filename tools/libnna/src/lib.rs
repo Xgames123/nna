@@ -1,9 +1,12 @@
 mod extra_number_traits;
 mod usmol;
-use std::{fmt::Display, marker::PhantomData, ops::Deref};
+use std::fmt::Display;
 
 pub use extra_number_traits::*;
 pub use usmol::*;
+
+pub mod instruction_sets;
+pub use instruction_sets::InstructionSet;
 
 pub enum Reg {
     R0,
@@ -60,165 +63,90 @@ impl Display for OpArgs {
     }
 }
 
-macro_rules! opargs {
+pub trait ISet: Sized + Copy {
+    fn try_from_str(str: &str) -> Option<Self>;
+    fn args(self) -> OpArgs;
+    fn name(self) -> &'static str;
+}
+
+macro_rules! opargs_impl {
     (($desc:literal:reg)) => {
-        OpArgs::OneReg($desc)
+        crate::OpArgs::OneReg($desc)
     };
     (($desc1:literal:reg, $desc2:literal:reg)) => {
-        OpArgs::TowReg($desc1, $desc2)
+        crate::OpArgs::TowReg($desc1, $desc2)
     };
     (($desc:literal:4bit)) => {
-        OpArgs::Bit4($desc)
+        crate::OpArgs::Bit4($desc)
     };
     (()) => {
-        OpArgs::None
+        crate::OpArgs::None
     };
 }
+pub(crate) use opargs_impl as opargs;
 
-macro_rules! instruction_sets {
-    ($($iset:ident{$($name:literal:$opcode:literal$args:tt),*})*) => {
-        #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+macro_rules! instruction_set_impl {
+    ($vis:vis $name:ident {$($opname:literal($opcode:literal)$opargs:tt),*}) => {
         #[derive(Copy, Clone)]
-        pub enum InstructionSet {
-            $($iset),*
-        }
-
-        #[derive(Clone, Copy)]
-        pub struct Op(u8, InstructionSet);
-
-        impl Op {
-            pub fn try_from_str(string: &str, iset: InstructionSet) -> Option<(Self,OpArgs)> {
-                if string.starts_with("?"){
+        $vis struct $name(u8);
+        impl crate::ISet for $name {
+            fn try_from_str(str: &str) -> Option<Self> {
+                if str.starts_with("?"){
                     return None;
                 }
-                match iset {
+                match str {
                     $(
-                        InstructionSet::$iset =>
-                            match string {
-                                $(
-                                    $name => Some((Self($opcode, iset),opargs!($args))),
-                                )*
-                                _=>{None}
-                            }
-
-
-                    ),*
+                        $opname => Some(Self($opcode)),
+                    )*
+                    _=>{None}
                 }
             }
-            pub fn args(self) -> OpArgs {
-                match self.1{
-                $(
-                    InstructionSet::$iset =>
-                    match self.0 {
-                        $(
-                            $opcode => opargs!($args),
-                        )*
-                            _=>unreachable!()
-                    }
 
-                ),*}
-
+            fn args(self) -> crate::OpArgs {
+                match self.0 {
+                    $(
+                        $opcode => crate::opargs!($opargs),
+                    )*
+                    _ => unreachable!(),
+                }
             }
-            pub fn opname(self) -> &'static str {
-                match self.1{
-                $(
-                    InstructionSet::$iset =>
+            fn name(self) -> &'static str {
                     match self.0 {
                         $(
-                            $opcode => $name,
+                            $opcode => $opname,
                         )*
-                            _=>{"?"}
+                        _ => unreachable!(),
                     }
+            }
 
-                ),*}
+        }
+
+        impl $name {
+            pub fn into_u8(self) -> u8 {
+                self.0
+            }
+        }
+        impl Into<u8> for $name {
+            fn into(self) -> u8 {
+                self.0
+            }
+        }
+        impl std::ops::Deref for $name {
+            type Target=u8;
+            fn deref(&self) -> &u8 {
+                &self.0
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                use crate::ISet;
+                f.write_str(self.name())?;
+                f.write_str(" ")?;
+                self.args().fmt(f)
             }
         }
 
     };
 }
-impl Op {
-    pub fn into_u8(self) -> u8 {
-        self.0
-    }
-}
-impl Into<u8> for Op {
-    fn into(self) -> u8 {
-        self.0
-    }
-}
-impl Display for Op {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.opname())?;
-        f.write_str(" ")?;
-        self.args().fmt(f)
-    }
-}
-
-instruction_sets! {
-    Nna8v1 {
-        "nop":0x00(),
-        "brk":0x04(),
-        "flf":0x08(),
-        "clf":0x0C(),
-        "jmp":0x01("addr":reg),
-        "inc":0x02("reg":reg),
-        "dec":0x03("reg":reg),
-
-        "lil":0x10("value":4bit),
-        "lih":0x20("value":4bit),
-        "mwr":0x30("reg":reg,"addr":reg),
-        "mrd":0x40("reg":reg,"addr":reg),
-        "mov":0x50("dest":reg, "source":reg),
-        "bra":0x60("addr":4bit),
-        "rol":0x70("a":reg, "b":reg),
-        "eq" :0x80("a":reg, "b":reg),
-        "gt" :0x90("a":reg, "b":reg),
-        "add":0xA0("source":reg, "a":reg),
-        "mul":0xB0("source":reg, "a":reg),
-        "and":0xC0("source":reg, "a":reg),
-        "not":0xD0("a":reg, "b":reg),
-        "or" :0xE0("source":reg, "a":reg),
-        "xor":0xF0("source":reg, "a":reg)
-    }
-
-    Nna8v2 {
-        "nop":0x00(),
-        "brk":0x04(),
-        "flf":0x08(),
-        "clf":0x0C(),
-        "jmp":0x01("addr":reg),
-        "inc":0x02("reg":reg),
-        "dec":0x03("reg":reg),
-
-        "lil":0x10("value":4bit),
-        "lih":0x20("value":4bit),
-        "mwr":0x30("reg":reg,"addr":reg),
-        "mrd":0x40("reg":reg,"addr":reg),
-        "mov":0x50("dest":reg, "source":reg),
-        "bra":0x60("addr":4bit),
-        "add":0x70(),
-        "sub":0x71(),
-        "div":0x72(),
-        "mul":0x73(),
-        "shl":0x74(),
-        "shr":0x75(),
-        "rol":0x76(),
-        "ror":0x77(),
-        "and":0x78(),
-        "or": 0x79(),
-        "not":0x7A(),
-        // "?": 0x7B(),
-        // "?": 0x7C(),
-        // "?": 0x7D(),
-        // "?": 0x7E(),
-        // "?": 0x7F(),
-        "eq": 0x80("a":reg, "b":reg),
-        "gt": 0x90("a":reg, "b":reg),
-        "cal":0xA0("a":reg, "b":reg),
-        // "?": 0xB0("source":reg, "a":reg),
-        // "?": 0xC0("source":reg, "a":reg),
-        // "?": 0xD0("source":reg, "a":reg),
-        "sbs":0xE0("bank":reg),
-        "xor":0xF0("source":reg, "a":reg)
-    }
-}
+pub(crate) use instruction_set_impl as instruction_set;

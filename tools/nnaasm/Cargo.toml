@@ -1,9 +1,9 @@
 [package]
 name = "nnaasm"
-authors =["ldev <ldev@ldev.eu.org>"]
 description="Assembler for for the nna assembly language"
 version = "1.0.0"
-edition = "2021"
+authors.workspace=true
+edition.workspace=true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

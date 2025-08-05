@@ -1,16 +1,15 @@
 use std::borrow::Cow;
-use std::ops::AddAssign;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use super::parse::Parser;
 use super::{IntoAsmError, Located, Location};
-use libnna::{u2, u4, InstructionSet, Op, OpArgs};
+use libnna::{u2, u4, BitCount, ISet, OpArgs, ParseBin, ParseHex};
 
 type Result<T> = std::result::Result<Located<T>, Located<LexError>>;
 
 #[derive(Debug, Clone)]
-pub enum ValueToken<T: UnsignedNum> {
+pub enum ValueToken<T> {
     LabelRef(Box<str>, RefType),
     Const(T),
 }
@@ -110,13 +109,13 @@ fn parse_identifier<'a>(str: &'a str) -> Option<&'a str> {
     Some(&str[1..])
 }
 
-fn parse_value<T: UnsignedNum>(
+fn parse_value<T: ParseHex + ParseBin + BitCount>(
     token: &str,
     location: Location,
 ) -> std::result::Result<Option<Located<ValueToken<T>>>, Located<LexError>> {
     if token.starts_with("0x") {
         let value = T::parse_hex(&token[2..]).ok_or(LexError::located(
-            format!("Invalid {} bit hex literal", T::THEORETICAL_SIZE).into(),
+            format!("Invalid {} bit hex literal", T::BIT_COUNT).into(),
             location.clone(),
         ))?;
         return Ok(Some(Located::new(ValueToken::Const(value), location)));
@@ -161,15 +160,17 @@ fn parse_next_hex8(parser: &mut Parser) -> Result<u8> {
     Ok(Located::new(value, parser.location()))
 }
 
-fn parse_next_value<T: UnsignedNum>(parser: &mut Parser) -> Result<ValueToken<T>> {
+fn parse_next_value<T: ParseBin + ParseHex + BitCount>(
+    parser: &mut Parser,
+) -> Result<ValueToken<T>> {
     let token = parser.next_same_line_or_err(Cow::Owned(format!(
         "Expected an {} bit value after this.",
-        T::THEORETICAL_SIZE
+        T::BIT_COUNT
     )))?;
     match parse_value::<T>(token, parser.location())? {
         Some(v) => Ok(v),
         None => Err(LexError::located(
-            format!("Expected an {} bit value.", T::THEORETICAL_SIZE).into(),
+            format!("Expected an {} bit value.", T::BIT_COUNT).into(),
             parser.location(),
         )),
     }
@@ -245,23 +246,23 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
     }
 }
 
-fn parse_op<'a>(token: &'a str, iset: InstructionSet, parser: &mut Parser) -> Result<OpToken> {
-    let (op, args) = Op::try_from_str(token, iset).ok_or(LexError::static_located(
+fn parse_op<I: ISet + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpToken> {
+    let op = I::try_from_str(token).ok_or(LexError::static_located(
         "Unknown operation. See spec for available operations",
         parser.location(),
     ))?;
     let loc = parser.location();
-    Ok(match args {
-        OpArgs::None => Located::new(OpToken::Full(op.into_u8()), loc),
+    Ok(match op.args() {
+        OpArgs::None => Located::new(OpToken::Full(op.into()), loc),
         OpArgs::Bit4(_) => {
             let value = parse_next_value::<u4>(parser)?;
             let token = match value.value {
-                ValueToken4::Const(value) => OpToken::Full(op.into_u8() | value.into_low()),
+                ValueToken4::Const(value) => OpToken::Full(op.into() | value.into_low()),
                 ValueToken4::LabelRef(name, ref_type) => {
                     if ref_type.is_full() {
                         return Err(LexError::static_located("Cant fit a full sized reference (8 bits) into 4 bits. Use .low or .high sufix to get the low or high part of the reference.", parser.location()));
                     }
-                    OpToken::LabelRef(op.into_u8(), name, ref_type)
+                    OpToken::LabelRef(op.into(), name, ref_type)
                 }
             };
             Located::new(token, loc.combine(value.location))
@@ -270,7 +271,7 @@ fn parse_op<'a>(token: &'a str, iset: InstructionSet, parser: &mut Parser) -> Re
             let register = parse_next_reg(parser)?;
 
             Located::new(
-                OpToken::Full(op.into_u8() | (register.value.into_low() << 2)),
+                OpToken::Full(op.into() | (register.value.into_low() << 2)),
                 loc.combine(register.location),
             )
         }
@@ -280,7 +281,7 @@ fn parse_op<'a>(token: &'a str, iset: InstructionSet, parser: &mut Parser) -> Re
 
             Located::new(
                 OpToken::Full(
-                    op.into_u8() | register0.value.into_low() << 2 | register1.value.into_low(),
+                    op.into() | register0.value.into_low() << 2 | register1.value.into_low(),
                 ),
                 loc.combine(register0.location).combine(register1.location),
             )
@@ -288,9 +289,8 @@ fn parse_op<'a>(token: &'a str, iset: InstructionSet, parser: &mut Parser) -> Re
     })
 }
 
-pub fn parse_lex(
+pub fn parse_lex<I: ISet + Into<u8>>(
     input: &str,
-    iset: InstructionSet,
 ) -> std::result::Result<Vec<Located<Token>>, Located<LexError>> {
     let mut out_vec = Vec::new();
     let Some(mut parser) = Parser::new(input) else {
@@ -323,6 +323,6 @@ pub fn parse_lex(
             continue;
         }
 
-        out_vec.push(parse_op(token, iset, &mut parser)?.map(|opt| Token::Op(opt)));
+        out_vec.push(parse_op::<I>(token, &mut parser)?.map(|opt| Token::Op(opt)));
     }
 }
