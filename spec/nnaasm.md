@@ -22,6 +22,9 @@ start_of_code:
 
 ; some code that I want between 0xA0 and 0xB0
 
-.assert_dist 0xA0 0x10 ; .assert_max_dist <start> <max_distance> gives a compiler error when the distance between the directive and <start> is more than max_distance
-.assert_dist &start_of_code 0x10 ; this is also possible
+bra 0x0 .reachable 0xA0 ; give a compiler error when the branch instruction can not jump to the address specified
+; .reachable &start_of_code ; this is also possible
+
+
+.bank 0xA0 ; the following code will be written to 0xA0 bank  (note: not all architectures accessing other banks)
 ```

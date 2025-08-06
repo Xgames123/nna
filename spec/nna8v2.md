@@ -34,7 +34,7 @@ Parameters that take a register are noted using: [description].
 | sin  | 0x0    |  {ins}  |  {ins}   | Runs the sub instruction {ins}.                                                  | 1      | /             | w(dp) w(db) |
 | eq   | 0x1    |   [a]   |   [b]    | Sets the overflow flag to the result of !([a] == [b]).                           | 1      | write         |      r      |
 | gt   | 0x2    |   [a]   |   [b]    | Sets the overflow flag to the result of !([a] > [b]).                            | 1      | write         |      r      |
-| ?    | 0x3    |  [reg]  |  [reg]   | unused                                                                           | 1      | /             |      /      |
+| flg  | 0x3    |  {val}  | [unused] | Flip, set or reset the flag                                                      | 1      | /             |      /      |
 | ?    | 0x4    |  [reg]  |  [reg]   | unused                                                                           | 1      | /             |      /      |
 | bra  | 0x5    | {addr}  |  {addr}  | Branch to {addr} when the overflow flag is **not** set.                          | 1      | skip when set |      /      |
 | mco  | 0x6    |  {co}   |   {co}   | Loads the {co} into the *co* register                                            | 1      | /             |    w(co)    |
@@ -49,18 +49,29 @@ Parameters that take a register are noted using: [description].
 | dec  | 0xF    |  [reg]  | {amount} | Decrement [reg] by {amount}                                                      | 1      | overflow      |     rw      |
 
 
+
 ## sin {ins} {ins}
 Run the sub instruction {ins}
 
-| sub inst | arg0   | arg1 | description                                                    | flag          | reg-io |
-|----------|--------|------|----------------------------------------------------------------|---------------|--------|
-| nop      | 00     | 00   | Does nothing.                                                  | /             | -      |
-| brk      | 01     | 00   | Break the debugger.                                            | /             | -      |
-| flf      | 10     | 00   | Flips flag (if flag was set reset else set)                    | write         | -      |
-| clf      | 11     | 00   | Clear flag                                                     | write         | -      |
-| jmp      | [reg]  | 01   | Do a long jump to [addr] when the overflow flag is **not** set | skip when set | -      |
-| mpb      | [bank] | 10   | Move [bank] into the *pb* register                             | /             | rw(pb) |
-| mdb      | [bank] | 11   | Move [bank] into the *db* register                             | /             | rw(db) |
+| sub inst | arg0   | arg1 | description                                                    | flag          | reg-io  |
+|----------|--------|------|----------------------------------------------------------------|---------------|---------|
+| nop      | 00     | 00   | Does nothing.                                                  | /             | -       |
+| brk      | 01     | 00   | Break the debugger.                                            | /             | -       |
+| ?        | 10     | 00   | unused                                                         | /             | -       |
+| ?        | 11     | 00   | unused                                                         | /             | -       |
+| jmp      | [reg]  | 01   | Do a long jump to [addr] when the overflow flag is **not** set | skip when set | -       |
+| mpb      | [bank] | 10   | Move [bank] into the *pb* register                             | /             | r w(pb) |
+| mdb      | [bank] | 11   | Move [bank] into the *db* register                             | /             | r w(db) |
+
+## flg
+
+| op  | arg0 | description                                |
+|-----|------|--------------------------------------------|
+| flf | 00   | Flip flag (if flag is set: reset else set) |
+| flf | 10   | Flip flag (if flag is set: reset else set) |
+| sef | 11   | Set the flag                               |
+| clf | 01   | Reset the flag                             |
+
 
 ## mco {co} {co}
 Move the calculate operation into the *co* register

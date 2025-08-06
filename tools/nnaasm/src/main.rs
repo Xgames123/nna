@@ -1,5 +1,7 @@
+#![allow(dead_code)]
+use asm::Bank;
 use clap::{Parser, ValueEnum};
-use libnna::InstructionSet;
+use libnna::Architecture;
 use std::{
     ffi::OsStr,
     fs,
@@ -26,16 +28,16 @@ struct Cli {
     input: String,
 
     /// The instruction set to compile for
-    #[arg(short = 's', long, default_value = "nna8v1")]
-    iset: InstructionSet,
+    #[arg(short = 'a', long, default_value = "nna8v1")]
+    arch: Architecture,
 
     /// Output file
     #[arg(short = 'o', long, default_value = "out.bin")]
     output: String,
 
     /// Prints the amount of space the program uses
-    #[arg(short = 'm', long)]
-    memory_usage: bool,
+    #[arg(short = 'z', long)]
+    size: bool,
 
     /// The minimum log level
     #[arg(long, default_value = "0")]
@@ -94,11 +96,11 @@ fn write_hexline(str: &mut String, byte: u8, repeat_count: usize) {
     str.push('\n');
 }
 
-fn write_hex(input: &[u8; 256]) -> Vec<u8> {
+fn write_hex(input: Vec<Bank>) -> Vec<u8> {
     let mut output = "v2.0 raw\n".to_string();
-    let mut prev_byte = input[0];
+    let mut prev_byte = input[0][0];
     let mut repeat_count = 0;
-    for byte in input {
+    for byte in input.iter().flat_map(|b| b.iter()) {
         if *byte == prev_byte {
             repeat_count += 1;
             continue;
@@ -109,6 +111,9 @@ fn write_hex(input: &[u8; 256]) -> Vec<u8> {
     }
     write_hexline(&mut output, prev_byte, repeat_count);
     output.into_bytes()
+}
+fn write_bin(input: Vec<Bank>) -> Vec<u8> {
+    input.into_iter().flat_map(|b| b.into_iter()).collect()
 }
 
 fn main() {
@@ -126,7 +131,7 @@ fn main() {
         die!("Failed to read '{}'\n{}", cli.input, err);
     });
 
-    let output = match asm::assemble(filename.into(), &input_data, cli.iset) {
+    let output = match asm::assemble(filename.into(), &input_data, cli.arch) {
         Ok(out) => out,
         Err(err) => {
             err.print();
@@ -134,24 +139,28 @@ fn main() {
         }
     };
 
-    if cli.memory_usage {
-        let mem_usage = asm::codegen::calc_mem_usage(&output);
-        println!("Using {}/{} bytes", mem_usage.start, mem_usage.end);
+    if cli.size {
+        for (i, bank) in asm::codegen::calc_mem_usage(&output, 256)
+            .iter()
+            .enumerate()
+        {
+            println!("bank {:#x} Using {}/{} bytes", i, bank.start, bank.end);
+        }
     }
 
     let output = match cli.format {
-        OutputFormat::Bin => output.into(),
-        OutputFormat::Hex => write_hex(&output),
+        OutputFormat::Bin => write_bin(output),
+        OutputFormat::Hex => write_hex(output),
         OutputFormat::Auto => {
             if output_file.extension() == Some(OsStr::new("hex")) {
-                write_hex(&output)
+                write_hex(output)
             } else {
-                output.into()
+                write_bin(output)
             }
         }
     };
 
-    fs::write(output_file, &output).unwrap_or_else(|err| {
+    fs::write(output_file, output).unwrap_or_else(|err| {
         die!("Failed to write output file:\n{}", err);
     });
 }

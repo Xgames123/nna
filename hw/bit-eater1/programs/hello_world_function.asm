@@ -57,13 +57,13 @@ loop:
   xor r0 r0
   ;brk
   eq r0 r3
-  bra &end.low .assert_max_dist 0x40 0x10
+  bra &end.low .reachable &end
   clf
 
   mwr r3 r2 ; write cur_char to target_ptr
   inc r2 ; r2: target_ptr
   inc r1 ; r1: msg_ptr
-  bra &loop.low .assert_max_dist 0x40 0x10
+  bra &loop.low .reachable &loop
 end:
   ; pop ret addr off the stack
   lih &stack_ptr.high

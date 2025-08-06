@@ -4,11 +4,11 @@ use std::str::FromStr;
 
 use super::parse::Parser;
 use super::{IntoAsmError, Located, Location};
-use libnna::{u2, u4, BitCount, ISet, OpArgs, ParseBin, ParseHex};
+use libnna::{u2, u4, Arch, ConstArg, MaxValue, OpArgs, ParseBin, ParseHex};
 
 type Result<T> = std::result::Result<Located<T>, Located<LexError>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValueToken<T> {
     LabelRef(Box<str>, RefType),
     Const(T),
@@ -16,7 +16,7 @@ pub enum ValueToken<T> {
 pub type ValueToken8 = ValueToken<u8>;
 pub type ValueToken4 = ValueToken<u4>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RefType {
     Full,
     Low,
@@ -39,31 +39,25 @@ impl RefType {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpToken {
     Full(u8),
     LabelRef(u8, Box<str>, RefType),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     LabelDef(Box<str>),
     Org(u8),
     Value(ValueToken<u8>),
     Reachable(ValueToken<u8>),
     IncludeBytes(PathBuf),
+    Bank(u8),
     Bytes(Vec<u8>),
     Op(OpToken),
 }
-impl Token {
-    pub fn is_org(&self) -> bool {
-        match self {
-            Self::Org(_) => true,
-            _ => false,
-        }
-    }
-}
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct LexError {
     message: Cow<'static, str>,
 }
@@ -109,13 +103,13 @@ fn parse_identifier<'a>(str: &'a str) -> Option<&'a str> {
     Some(&str[1..])
 }
 
-fn parse_value<T: ParseHex + ParseBin + BitCount>(
+fn parse_value<T: ParseHex + ParseBin + MaxValue>(
     token: &str,
     location: Location,
 ) -> std::result::Result<Option<Located<ValueToken<T>>>, Located<LexError>> {
     if token.starts_with("0x") {
         let value = T::parse_hex(&token[2..]).ok_or(LexError::located(
-            format!("Invalid {} bit hex literal", T::BIT_COUNT).into(),
+            format!("Invalid {} bit hex literal", T::MAX_VALUE).into(),
             location.clone(),
         ))?;
         return Ok(Some(Located::new(ValueToken::Const(value), location)));
@@ -160,35 +154,41 @@ fn parse_next_hex8(parser: &mut Parser) -> Result<u8> {
     Ok(Located::new(value, parser.location()))
 }
 
-fn parse_next_value<T: ParseBin + ParseHex + BitCount>(
+fn parse_next_value<T: ParseBin + ParseHex + MaxValue>(
     parser: &mut Parser,
 ) -> Result<ValueToken<T>> {
     let token = parser.next_same_line_or_err(Cow::Owned(format!(
         "Expected an {} bit value after this.",
-        T::BIT_COUNT
+        T::MAX_VALUE
     )))?;
     match parse_value::<T>(token, parser.location())? {
         Some(v) => Ok(v),
         None => Err(LexError::located(
-            format!("Expected an {} bit value.", T::BIT_COUNT).into(),
+            format!("Expected an {} bit value.", T::MAX_VALUE).into(),
             parser.location(),
         )),
     }
 }
-fn parse_next_reg(parser: &mut Parser) -> Result<u2> {
-    let token = parser.next_same_line_or_err(Cow::Borrowed(
-        "Expected a register after this. Found end of file",
-    ))?;
-    match token {
-        "r0" => Ok(Located::new(u2::ZERO, parser.location())),
-        "r1" => Ok(Located::new(u2::ONE, parser.location())),
-        "r2" => Ok(Located::new(u2::TOW, parser.location())),
-        "r3" => Ok(Located::new(u2::THREE, parser.location())),
-        _ => Err(LexError::static_located(
-            "Invalid register name",
-            parser.location(),
-        )),
+fn parse_next_constarg(parser: &mut Parser, constarg: ConstArg) -> Result<u8> {
+    let token = parser.next_same_line_or_err(
+        format!(
+            "Expected a '{}' after this. Found end of file",
+            constarg.name
+        )
+        .into(),
+    )?;
+    for (i, var) in constarg.variants.iter().enumerate() {
+        if *var == "?" {
+            continue;
+        }
+        if *var == token {
+            return Ok(Located::new(i as u8, parser.location()));
+        }
     }
+    Err(LexError::located(
+        format!("Invalid '{}'", constarg.name).into(),
+        parser.location(),
+    ))
 }
 
 fn parse_next_str<'a>(parser: &'a mut Parser) -> Result<&'a str> {
@@ -221,6 +221,13 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
                 token_loc.combine(addr.location),
             ));
         }
+        "bank" => {
+            let addr = parse_next_hex8(parser)?;
+            return Ok(Located::new(
+                Token::Bank(addr.value),
+                token_loc.combine(addr.location),
+            ));
+        }
         "reachable" => {
             let start = parse_next_value::<u8>(parser)?;
 
@@ -246,7 +253,7 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
     }
 }
 
-fn parse_op<I: ISet + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpToken> {
+fn parse_op<I: Arch + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpToken> {
     let op = I::try_from_str(token).ok_or(LexError::static_located(
         "Unknown operation. See spec for available operations",
         parser.location(),
@@ -267,29 +274,50 @@ fn parse_op<I: ISet + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpTo
             };
             Located::new(token, loc.combine(value.location))
         }
-        OpArgs::OneReg(_) => {
-            let register = parse_next_reg(parser)?;
+        OpArgs::ConstNone((_, arg)) => {
+            let register = parse_next_constarg(parser, arg)?;
 
             Located::new(
-                OpToken::Full(op.into() | (register.value.into_low() << 2)),
+                OpToken::Full(op.into() | (register.value << 2)),
                 loc.combine(register.location),
             )
         }
-        OpArgs::TowReg(_arg0_name, _arg1_name) => {
-            let register0 = parse_next_reg(parser)?;
-            let register1 = parse_next_reg(parser)?;
+        OpArgs::ConstConst((_, arg0), (_, arg1)) => {
+            let register0 = parse_next_constarg(parser, arg0)?;
+            let register1 = parse_next_constarg(parser, arg1)?;
 
             Located::new(
-                OpToken::Full(
-                    op.into() | register0.value.into_low() << 2 | register1.value.into_low(),
-                ),
+                OpToken::Full(op.into() | register0.value << 2 | register1.value),
                 loc.combine(register0.location).combine(register1.location),
+            )
+        }
+        OpArgs::ConstBit2((_, arg0), _) => {
+            let register0 = parse_next_constarg(parser, arg0)?;
+            let value1 = match parse_next_value::<u2>(parser)? {
+                Located {
+                    location,
+                    value: ValueToken::Const(v),
+                } => Located::new(v, location),
+                Located {
+                    location,
+                    value: ValueToken::LabelRef(_, _),
+                } => {
+                    return Err(LexError::static_located(
+                        "label not allowed for 2 bit values",
+                        location,
+                    ))
+                }
+            };
+
+            Located::new(
+                OpToken::Full(op.into() | register0.value << 2 | value1.value.into_low()),
+                loc.combine(register0.location).combine(value1.location),
             )
         }
     })
 }
 
-pub fn parse_lex<I: ISet + Into<u8>>(
+pub fn parse_lex<I: Arch + Into<u8>>(
     input: &str,
 ) -> std::result::Result<Vec<Located<Token>>, Located<LexError>> {
     let mut out_vec = Vec::new();
@@ -324,5 +352,26 @@ pub fn parse_lex<I: ISet + Into<u8>>(
         }
 
         out_vec.push(parse_op::<I>(token, &mut parser)?.map(|opt| Token::Op(opt)));
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use libnna::instruction_sets::Nna8v1;
+
+    use crate::asm::{lex::Token, Located};
+
+    use super::parse_lex;
+
+    #[test]
+    fn parse_org() {
+        let code = r#"
+.org 0xAB
+
+;comment "#;
+        assert_eq!(
+            parse_lex::<Nna8v1>(code),
+            Ok(vec![Located::new(Token::Org(0xAB), (1, 0..9).into())])
+        )
     }
 }

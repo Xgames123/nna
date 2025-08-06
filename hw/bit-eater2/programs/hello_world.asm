@@ -1,3 +1,4 @@
+
 .org 0x00
 lih &message.high
 mov r1 r0
@@ -20,7 +21,7 @@ inc r1
 inc r3
 bra &loop.low
 
-.reachable 0x00
+.assert_max_dist 0x00 0x10
 
 end:
 brk

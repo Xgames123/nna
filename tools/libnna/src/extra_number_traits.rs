@@ -1,7 +1,7 @@
 use crate::{u2, u4};
 
-pub trait BitCount {
-    const BIT_COUNT: u8;
+pub trait MaxValue {
+    const MAX_VALUE: u64;
 }
 pub trait ParseHex: Sized {
     fn parse_hex(str: &str) -> Option<Self>;
@@ -14,7 +14,7 @@ pub trait BitOps: Sized {
     fn set_bit(self, n: usize) -> Self;
 }
 
-impl<T: BitCount + TryFrom<u64>> ParseBin for T {
+impl<T: MaxValue + TryFrom<u64>> ParseBin for T {
     fn parse_bin(str: &str) -> Option<Self> {
         let str = str.strip_prefix("0b").unwrap_or(str);
         let mut num: u64 = 0;
@@ -34,13 +34,13 @@ impl<T: BitCount + TryFrom<u64>> ParseBin for T {
                 }
             }
         }
-        if i > (T::BIT_COUNT as u64) {
+        if num > T::MAX_VALUE {
             return None;
         }
         T::try_from(num).ok()
     }
 }
-impl<T: BitCount + TryFrom<u64>> ParseHex for T {
+impl<T: MaxValue + TryFrom<u64>> ParseHex for T {
     fn parse_hex(str: &str) -> Option<Self> {
         let str = str.strip_prefix("0x").unwrap_or(str);
         let mut num: u64 = 0;
@@ -52,30 +52,30 @@ impl<T: BitCount + TryFrom<u64>> ParseHex for T {
             num |= (char.to_digit(16)? as u64) << i;
             i += 4;
         }
-        if num > 2u64.pow((T::BIT_COUNT - 1) as u32) {
+        if num > T::MAX_VALUE {
             return None;
         }
         T::try_from(num).ok()
     }
 }
 
-impl BitCount for u64 {
-    const BIT_COUNT: u8 = 64;
+impl MaxValue for u64 {
+    const MAX_VALUE: u64 = u64::MAX;
 }
-impl BitCount for u32 {
-    const BIT_COUNT: u8 = 32;
+impl MaxValue for u32 {
+    const MAX_VALUE: u64 = u32::MAX as u64;
 }
-impl BitCount for u16 {
-    const BIT_COUNT: u8 = 16;
+impl MaxValue for u16 {
+    const MAX_VALUE: u64 = u16::MAX as u64;
 }
-impl BitCount for u8 {
-    const BIT_COUNT: u8 = 8;
+impl MaxValue for u8 {
+    const MAX_VALUE: u64 = u8::MAX as u64;
 }
-impl BitCount for u4 {
-    const BIT_COUNT: u8 = 4;
+impl MaxValue for u4 {
+    const MAX_VALUE: u64 = u4::MAX.into_low() as u64;
 }
-impl BitCount for u2 {
-    const BIT_COUNT: u8 = 2;
+impl MaxValue for u2 {
+    const MAX_VALUE: u64 = u2::MAX.into_low() as u64;
 }
 
 #[cfg(test)]
@@ -109,8 +109,8 @@ mod test {
         assert_eq!(u32::parse_bin("01"), Some(0b01));
 
         assert_ne!(u4::parse_bin("1100_00"), Some(u4::from_low(0b1100)));
-        assert_ne!(u4::parse_bin("00_1100"), Some(u4::from_low(0b1100)));
 
+        assert_eq!(u4::parse_bin("00_1100"), Some(u4::from_low(0b1100)));
         assert_eq!(u4::parse_bin("0001"), Some(u4::from_low(0b1)));
         assert_eq!(u4::parse_bin("1"), Some(u4::from_low(0b0001)));
 
@@ -133,6 +133,7 @@ mod test {
 
         assert_eq!(u16::parse_hex("10AB"), Some(0x10AB));
 
+        assert_eq!(u8::parse_hex("AB"), Some(0xAB));
         assert_eq!(u8::parse_hex("69"), Some(0x69));
 
         assert_eq!(u8::parse_hex("0x69"), Some(0x69));

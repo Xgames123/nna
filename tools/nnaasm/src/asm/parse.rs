@@ -60,13 +60,13 @@ impl<'a> CodeIter<'a> {
 }
 
 pub struct Parser<'a> {
-    lastt_location: Location,
+    last_location: Location,
     codeiter: CodeIter<'a>,
 }
 impl<'a> Parser<'a> {
     pub fn new(code: &'a str) -> Option<Self> {
         Some(Self {
-            lastt_location: (0, 0..0).into(),
+            last_location: (0, 0..0).into(),
             codeiter: CodeIter::new(code),
         })
     }
@@ -89,7 +89,7 @@ impl<'a> Parser<'a> {
         self.codeiter.code()
     }
     pub fn location(&self) -> Location {
-        self.lastt_location.clone()
+        self.last_location.clone()
     }
     pub fn next_same_line_or_err(
         &mut self,
@@ -97,7 +97,7 @@ impl<'a> Parser<'a> {
     ) -> Result<&'a str, Located<super::lex::LexError>> {
         self.next_same_line().ok_or(super::lex::LexError::located(
             message,
-            self.lastt_location.clone(),
+            self.last_location.clone(),
         ))
     }
 
@@ -138,11 +138,11 @@ impl<'a> Parser<'a> {
             let index = self.codeiter.index();
 
             if (!string_token && cur_char.is_whitespace()) || cur_char == '\n' {
-                self.lastt_location = (line, start_col..col).into();
+                self.last_location = (line, start_col..col).into();
                 return Some(&self.codeiter.code()[start_index..index]);
             }
             if (string_token && cur_char == '"') | self.next_char_skip_comments().is_none() {
-                self.lastt_location = (line, start_col..col + 1).into();
+                self.last_location = (line, start_col..col + 1).into();
                 return Some(&self.codeiter.code()[start_index..index + 1]);
             }
         }
@@ -208,13 +208,13 @@ r1 r0"#;
         let mut cp = Parser::new(code).unwrap();
 
         assert_eq!(cp.next(), Some("linezero"));
-        assert_eq!(cp.lastt_location, Location::from((0, 0..8)));
+        assert_eq!(cp.last_location, Location::from((0, 0..8)));
         assert_eq!(cp.next(), Some("token1"));
-        assert_eq!(cp.lastt_location, Location::from((2, 0..6)));
+        assert_eq!(cp.last_location, Location::from((2, 0..6)));
         assert_eq!(cp.next(), Some("token2"));
-        assert_eq!(cp.lastt_location, Location::from((3, 0..6)));
+        assert_eq!(cp.last_location, Location::from((3, 0..6)));
         assert_eq!(cp.next(), Some("token3"));
-        assert_eq!(cp.lastt_location, Location::from((4, 0..6)));
+        assert_eq!(cp.last_location, Location::from((4, 0..6)));
         assert_eq!(cp.next(), Some("r1"));
         assert_eq!(cp.next(), Some("r0"));
         assert_eq!(cp.next(), None);
@@ -232,7 +232,7 @@ token_attached_to_end"#;
         assert_eq!(cp.next(), Some("token0"));
         assert_eq!(cp.next(), Some("between_token"));
         assert_eq!(cp.next(), Some("token_attached_to_end"));
-        assert_eq!(cp.lastt_location, Location::from((5, 0..21)));
+        assert_eq!(cp.last_location, Location::from((5, 0..21)));
     }
 
     #[test]

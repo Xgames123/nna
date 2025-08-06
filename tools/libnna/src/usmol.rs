@@ -19,8 +19,17 @@ impl Error for TryFromIntError {
 
 #[macro_export]
 macro_rules! u2 {
-    ($val:literal) => {
-        u2::from_low($val)
+    (0b00) => {
+        u2::ZERO
+    };
+    (0b01) => {
+        u2::ONE
+    };
+    (0b10) => {
+        u2::TWO
+    };
+    (0b11) => {
+        u2::THREE
     };
 }
 
@@ -30,8 +39,9 @@ pub struct u2(u8);
 impl u2 {
     pub const ZERO: u2 = u2::from_low(0b00000000);
     pub const ONE: u2 = u2::from_low(0b00000001);
-    pub const TOW: u2 = u2::from_low(0b00000010);
+    pub const TWO: u2 = u2::from_low(0b00000010);
     pub const THREE: u2 = u2::from_low(0b00000011);
+    pub const MAX: u2 = Self::THREE;
 
     #[inline]
     pub const fn from_low(val: u8) -> Self {
@@ -46,15 +56,22 @@ impl u2 {
         self.0 << 6
     }
 }
-impl TryFrom<usize> for u2 {
+impl TryFrom<u64> for u2 {
     type Error = TryFromIntError;
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
         if value <= 3 {
             Ok(u2(value as u8))
         } else {
             Err(TryFromIntError)
         }
     }
+}
+
+#[macro_export]
+macro_rules! u4 {
+    ($lit:literal) => {
+        u4::from_low($lit)
+    };
 }
 
 #[allow(non_camel_case_types)]

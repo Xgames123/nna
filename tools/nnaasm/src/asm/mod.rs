@@ -5,9 +5,13 @@ use std::{
     rc::Rc,
 };
 
-use libnna::{instruction_sets::Nna8v1, InstructionSet};
+use libnna::{
+    instruction_sets::{Nna8v1, Nna8v2},
+    Architecture,
+};
 
 use self::lex::parse_lex;
+pub use codegen::Bank;
 
 pub mod codegen;
 mod lex;
@@ -44,7 +48,7 @@ impl Location {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Located<T> {
     pub location: Location,
     pub value: T,
@@ -188,13 +192,10 @@ fn resolve_includes<'a>(
     Ok(())
 }
 
-pub fn assemble(
-    filename: Rc<str>,
-    input: &str,
-    iset: InstructionSet,
-) -> Result<[u8; 256], AsmError> {
-    let mut parsed = match iset {
-        InstructionSet::Nna8v1 => parse_lex::<Nna8v1>(input),
+pub fn assemble(filename: Rc<str>, input: &str, arch: Architecture) -> Result<Vec<Bank>, AsmError> {
+    let mut parsed = match arch {
+        Architecture::Nna8v1 => parse_lex::<Nna8v1>(input),
+        Architecture::Nna8v2 => parse_lex::<Nna8v2>(input),
     }
     .map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
     resolve_includes(&mut parsed, &input, filename.clone())?;
@@ -203,15 +204,15 @@ pub fn assemble(
 
 #[cfg(test)]
 mod tests {
-    use libnna::InstructionSet;
+    use libnna::Architecture;
 
     use super::Located;
 
     fn assemble_assert(code: &str, bin: &[u8]) {
         let mut full_bin = [0; 256];
         full_bin[..bin.len()].copy_from_slice(bin);
-        match super::assemble("test".into(), code, InstructionSet::Nna8v1) {
-            Ok(gen_bin) => assert_eq!(gen_bin, full_bin),
+        match super::assemble("test".into(), code, Architecture::Nna8v1) {
+            Ok(gen_bin) => assert_eq!(gen_bin, vec![full_bin]),
             Err(e) => {
                 e.print();
                 assert!(false)
@@ -219,11 +220,11 @@ mod tests {
         }
     }
     fn assemble_assert_err(code: &str, err: Located<&str>) {
-        match super::assemble("test".into(), &code, InstructionSet::Nna8v1) {
+        match super::assemble("test".into(), &code, Architecture::Nna8v1) {
             Ok(_) => assert!(false, "An error should be thrown. but isn't"),
             Err(e) => {
-                assert_eq!(e.message, err.value);
-                assert_eq!(e.location, err.location);
+                assert_eq!(e.message, err.value, "error message doesn't match");
+                assert_eq!(e.location, err.location, "error location doesn't match");
             }
         }
     }
@@ -263,17 +264,20 @@ nop
     #[test]
     fn max_dist_fail() {
         let code = r#"
-.org 0x20
+.org 0x29
+nop ; 0x29
+nop ; 0x2A
 nop
 nop
 nop
-nop
-nop
-.assert_max_dist 0x20 0x4
+nop ; 0x2E
+nop ; 0x2F
+nop ; 0x30
+.reachable 0x29
 "#;
         assemble_assert_err(
             code,
-            Located::new("Assertion failed. distance was 0x05", (7, 0..25).into()),
+            Located::new("Address is not reachable from here.", (10, 0..15).into()),
         );
     }
 
@@ -296,9 +300,58 @@ nop
 nop
 nop
 nop
-nop ; jmp
-.assert_max_dist 0x20 0x10
+nop ; 0x2F jmp
+.reachable 0x20
 "#;
         assemble_assert(code, &[0; 0]);
+
+        let code = r#"
+.org 0x20
+nop ; 0x20
+nop
+nop
+nop
+nop
+nop
+.reachable 0x20
+"#;
+        assemble_assert(code, &[0; 0]);
+    }
+
+    #[test]
+    fn reachable_label() {
+        let code = r#"
+.org 0x20
+nop
+label:
+nop ; 0x21
+nop
+nop
+nop
+nop
+nop
+.reachable &label 
+"#;
+        assemble_assert(code, &[0; 0]);
+    }
+
+    #[test]
+    fn non_reachable_label() {
+        let code = r#"
+.org 0x2A
+nop
+label:
+nop 0x2C
+nop
+nop
+nop 0x2F
+nop 0x30 ; not reachable
+nop
+.reachable &label 
+"#;
+        assemble_assert_err(
+            code,
+            Located::new("Address is not reachable from here.", (10, 0..17).into()),
+        );
     }
 }

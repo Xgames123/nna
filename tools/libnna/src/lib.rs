@@ -6,21 +6,23 @@ pub use extra_number_traits::*;
 pub use usmol::*;
 
 pub mod instruction_sets;
-pub use instruction_sets::InstructionSet;
+pub use instruction_sets::Architecture;
 
-pub enum Reg {
-    R0,
-    R1,
-    R2,
-    R3,
+pub trait ConstOpArg {
+    const NAME: &'static str;
+    const VARIANTS: &'static [&'static str];
 }
-impl Reg {
-    pub fn code(&self) -> u2 {
-        match self {
-            Self::R0 => u2!(0b00),
-            Self::R1 => u2!(0b01),
-            Self::R2 => u2!(0b10),
-            Self::R3 => u2!(0b11),
+
+#[derive(Clone, Copy)]
+pub struct ConstArg {
+    pub name: &'static str,
+    pub variants: &'static [&'static str],
+}
+impl ConstArg {
+    pub fn new<T: ConstOpArg>() -> Self {
+        Self {
+            name: T::NAME,
+            variants: T::VARIANTS,
         }
     }
 }
@@ -29,52 +31,74 @@ impl Reg {
 pub enum OpArgs {
     ///No arguments
     None,
-    /// 1 register as arguments
-    OneReg(&'static str),
-    /// 2 registers as arguments
-    TowReg(&'static str, &'static str),
+    /// 1 const arg as argument 0
+    ConstNone((&'static str, ConstArg)),
+
+    /// 1 const arg as arg 0 and a 2 bit value as arg 1
+    ConstBit2((&'static str, ConstArg), &'static str),
+
+    /// 2 const args as arguments
+    ConstConst((&'static str, ConstArg), (&'static str, ConstArg)),
     /// 1 argument that is a 4 bit value
     Bit4(&'static str),
+}
+fn write_const_arg(
+    f: &mut std::fmt::Formatter,
+    arg: ConstArg,
+    desc: &'static str,
+) -> std::fmt::Result {
+    f.write_str("[")?;
+    f.write_str(desc)?;
+    f.write_str(":")?;
+    f.write_str(arg.name)?;
+    f.write_str("]")
 }
 impl Display for OpArgs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => {}
-            Self::OneReg(name) => {
-                f.write_str("[")?;
-                f.write_str(name)?;
-                f.write_str("]")?
+            Self::ConstNone((desc, arg)) => write_const_arg(f, *arg, desc)?,
+            Self::ConstBit2((desc0, arg0), desc1) => {
+                write_const_arg(f, *arg0, desc0)?;
+                f.write_str(" {")?;
+                f.write_str(*desc1)?;
+                f.write_str(":2bit}")?;
             }
-            Self::TowReg(name1, name2) => {
-                f.write_str("[")?;
-                f.write_str(name1)?;
-                f.write_str("]")?;
+            Self::ConstConst((desc0, arg0), (desc1, arg1)) => {
+                write_const_arg(f, *arg0, desc0)?;
                 f.write_str(" ")?;
-                f.write_str("[")?;
-                f.write_str(name2)?;
-                f.write_str("]")?
+                write_const_arg(f, *arg1, desc1)?;
             }
             Self::Bit4(name) => {
+                f.write_str("{")?;
                 f.write_str(*name)?;
-                f.write_str(":4bit")?;
+                f.write_str(":4bit}")?;
             }
         }
         Ok(())
     }
 }
 
-pub trait ISet: Sized + Copy {
+pub trait Arch: Sized + Copy {
+    const BANKS: bool = false;
+
     fn try_from_str(str: &str) -> Option<Self>;
     fn args(self) -> OpArgs;
     fn name(self) -> &'static str;
 }
 
 macro_rules! opargs_impl {
-    (($desc:literal:reg)) => {
-        crate::OpArgs::OneReg($desc)
+    (($desc:literal:$const:ty)) => {
+        crate::OpArgs::ConstNone(($desc, crate::ConstArg::new::<$const>()))
     };
-    (($desc1:literal:reg, $desc2:literal:reg)) => {
-        crate::OpArgs::TowReg($desc1, $desc2)
+    (($desc1:literal:$const:ty, $desc2:literal:2bit)) => {
+        crate::OpArgs::ConstBit2(($desc1, crate::ConstArg::new::<$const>()), $desc2)
+    };
+    (($desc1:literal:$const1:ty, $desc2:literal:$const2:ty)) => {
+        crate::OpArgs::ConstConst(
+            ($desc1, crate::ConstArg::new::<$const1>()),
+            ($desc2, crate::ConstArg::new::<$const2>()),
+        )
     };
     (($desc:literal:4bit)) => {
         crate::OpArgs::Bit4($desc)
@@ -85,11 +109,23 @@ macro_rules! opargs_impl {
 }
 pub(crate) use opargs_impl as opargs;
 
+macro_rules! iset_args_impl {
+    ($([$arg:ident])*) => {
+        $(
+            iset_args!($arg)
+        )*
+    };
+    (banks) => {
+        const BANKS: bool = true;
+    };
+}
+pub(crate) use iset_args_impl as iset_args;
+
 macro_rules! instruction_set_impl {
-    ($vis:vis $name:ident {$($opname:literal($opcode:literal)$opargs:tt),*}) => {
+    ( $vis:vis $name:ident $([$arg:ident])*{ $($opname:literal($opcode:literal)$opargs:tt),*}) => {
         #[derive(Copy, Clone)]
         $vis struct $name(u8);
-        impl crate::ISet for $name {
+        impl crate::Arch for $name {
             fn try_from_str(str: &str) -> Option<Self> {
                 if str.starts_with("?"){
                     return None;
@@ -118,6 +154,7 @@ macro_rules! instruction_set_impl {
                         _ => unreachable!(),
                     }
             }
+            crate::iset_args!($($arg),*);
 
         }
 
@@ -140,7 +177,7 @@ macro_rules! instruction_set_impl {
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                use crate::ISet;
+                use crate::Arch;
                 f.write_str(self.name())?;
                 f.write_str(" ")?;
                 self.args().fmt(f)
