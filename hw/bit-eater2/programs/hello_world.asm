@@ -7,21 +7,31 @@ lil &video_mem.low
 lih &video_mem.high
 mov r3 r0 ; r3 target
 
-xor r0 r0 ; zero r0
+brk
+.org 0x10
 loop:
-mrd r2 r1
+; switch to data
+xor r0 r0
+mdb r0 ; set bank back to 0
 
+mrd r2 r1 ; read current char into r2
+
+; switch to right bank
+dec r0 0x1 ; r0 = 0xFF
+mdb r0 ; set db to 0xFF
+
+; check for null
+xor r0 r0 ; zero r0
 eq r2 r0 ; check if r2 is zero
-bra &end.low
+bra &end.low .reachable &end
 clf
-; r2 is not 0
-;brk
-mwr r2 r3
-inc r1
-inc r3
-bra &loop.low
 
-.assert_max_dist 0x00 0x10
+; write char
+mwr r2 r3
+inc r1 0x1
+inc r3 0x1 ; should not overflow
+; flag is not set because r3 should not overflow
+bra &loop.low .reachable &loop
 
 end:
 brk
@@ -29,7 +39,7 @@ lil &end.low
 lih &end.high
 jmp r0
 
-.org 0x20
+.org 0x30
 
 message:
 0x48 ; H
@@ -47,6 +57,6 @@ message:
 0x21 ; !
 0x00
 
-; screen memory
-.org 0xF0
+.bank 0xFF
+.org 0x00
 video_mem:

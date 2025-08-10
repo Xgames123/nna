@@ -2,6 +2,8 @@ use crate::{u2, u4};
 
 pub trait MaxValue {
     const MAX_VALUE: u64;
+
+    const BIT_COUNT: u8 = Self::MAX_VALUE.count_ones() as u8;
 }
 pub trait ParseHex: Sized {
     fn parse_hex(str: &str) -> Option<Self>;

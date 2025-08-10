@@ -9,7 +9,7 @@ bit-eater is a custom mpu designed by me based on the nna8 architecture
 | addr       | size   | function  |
 |------------|--------|-----------|
 | 0x00..0xEE | (0xEE) | ram rw    |
-| 0xEE..0xEF | (0x02)  | keyboard  |
+| 0xEE..0xEF | (0x02) | keyboard  |
 | 0xEF..     | (0x10) | video mem |
 
 > ![NOTE]
@@ -18,19 +18,12 @@ bit-eater is a custom mpu designed by me based on the nna8 architecture
 
 ### bit-eater2 (nna8v2)
 
-| addr   | size | function   |
-|--------|------|------------|
-| 0x00   | 0x01 | port flags |
-| 0x01   | 0x01 | p0         |
-| 0x02   | 0x01 | p1         |
-| 0x03.. | 0xFC | video mem  |
-
-> ![NOTE]
-> Ranges are non inclusive
->
-> ![NOTE]
-> Peripherals are mapped on bank F (io bank)
->
+| bank | addr | size   | function   |
+|------|------|--------|------------|
+| 0xFF | 0x00 | (0x01) | port flags |
+| 0xFF | 0x01 | (0x01) | p0         |
+| 0xFF | 0x02 | (0x01) | p1         |
+| 0xEF | 0x00 | (0xFF) | video mem  |
 
 ### port flags
 | bit | function |
@@ -53,4 +46,4 @@ bit-eater is a custom mpu designed by me based on the nna8 architecture
 | mpu                 | res   | mode |
 |---------------------|-------|------|
 | bit-eater1 (nna8v1) | 16x8  | bw   |
-| bit-eater2 (nna8v2) | 63x32 | bw   |
+| bit-eater2 (nna8v2) | 64x32 | bw   |

@@ -46,15 +46,11 @@
       <elementName>In</elementName>
       <elementAttributes>
         <entry>
-          <string>rotation</string>
-          <rotation rotation="2"/>
-        </entry>
-        <entry>
           <string>Label</string>
           <string>OE</string>
         </entry>
       </elementAttributes>
-      <pos x="880" y="360"/>
+      <pos x="540" y="240"/>
     </visualElement>
     <visualElement>
       <elementName>In</elementName>
@@ -149,6 +145,10 @@
       <p2 x="660" y="480"/>
     </wire>
     <wire>
+      <p1 x="540" y="240"/>
+      <p2 x="920" y="240"/>
+    </wire>
+    <wire>
       <p1 x="660" y="340"/>
       <p2 x="680" y="340"/>
     </wire>
@@ -182,7 +182,7 @@
     </wire>
     <wire>
       <p1 x="860" y="360"/>
-      <p2 x="880" y="360"/>
+      <p2 x="920" y="360"/>
     </wire>
     <wire>
       <p1 x="680" y="520"/>
@@ -219,6 +219,10 @@
     <wire>
       <p1 x="680" y="500"/>
       <p2 x="680" y="520"/>
+    </wire>
+    <wire>
+      <p1 x="920" y="240"/>
+      <p2 x="920" y="360"/>
     </wire>
     <wire>
       <p1 x="860" y="300"/>

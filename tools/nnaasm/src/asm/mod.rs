@@ -208,17 +208,22 @@ mod tests {
 
     use super::Located;
 
-    fn assemble_assert(code: &str, bin: &[u8]) {
-        let mut full_bin = [0; 256];
-        full_bin[..bin.len()].copy_from_slice(bin);
+    fn assemble_assert(code: &str, bin: Vec<&[u8]>) {
+        let mut banks = Vec::new();
+        for bin in bin {
+            let mut full_bin = [0; 256];
+            full_bin[..bin.len()].copy_from_slice(bin);
+            banks.push(full_bin);
+        }
         match super::assemble("test".into(), code, Architecture::Nna8v1) {
-            Ok(gen_bin) => assert_eq!(gen_bin, vec![full_bin]),
+            Ok(gen_bin) => assert_eq!(gen_bin, banks),
             Err(e) => {
                 e.print();
                 assert!(false)
             }
         }
     }
+
     fn assemble_assert_err(code: &str, err: Located<&str>) {
         match super::assemble("test".into(), &code, Architecture::Nna8v1) {
             Ok(_) => assert!(false, "An error should be thrown. but isn't"),
@@ -241,7 +246,7 @@ mov r1 r0"#;
         bin[0] = 0x22;
         bin[1] = 0x14;
         bin[2] = 0x54;
-        assemble_assert(code, &[0x22, 0x14, 0x54]);
+        assemble_assert(code, vec![&[0x22, 0x14, 0x54]]);
     }
 
     #[test]
@@ -262,7 +267,19 @@ nop
     }
 
     #[test]
-    fn max_dist_fail() {
+    fn multi_bank_org() {
+        let code = r#".org 0x10
+nop
+nop
+.bank 0x01
+.org 0x11
+nop
+        "#;
+        assemble_assert(code, vec![&[], &[]]);
+    }
+
+    #[test]
+    fn reachable_fail() {
         let code = r#"
 .org 0x29
 nop ; 0x29
@@ -282,7 +299,7 @@ nop ; 0x30
     }
 
     #[test]
-    fn max_dist_success() {
+    fn reachable_success() {
         let code = r#"
 .org 0x20
 nop ; 0x20
@@ -303,7 +320,7 @@ nop
 nop ; 0x2F jmp
 .reachable 0x20
 "#;
-        assemble_assert(code, &[0; 0]);
+        assemble_assert(code, vec![&[]]);
 
         let code = r#"
 .org 0x20
@@ -315,7 +332,7 @@ nop
 nop
 .reachable 0x20
 "#;
-        assemble_assert(code, &[0; 0]);
+        assemble_assert(code, vec![&[]]);
     }
 
     #[test]
@@ -332,7 +349,7 @@ nop
 nop
 .reachable &label 
 "#;
-        assemble_assert(code, &[0; 0]);
+        assemble_assert(code, vec![&[]]);
     }
 
     #[test]

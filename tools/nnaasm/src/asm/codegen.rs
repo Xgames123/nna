@@ -81,12 +81,14 @@ fn calc_bank_usage(bank: &Bank, usable_size: usize) -> Range<usize> {
 pub struct OrgBuilder {
     loc: Location,
     start_addr: u8,
+    bank: u8,
     data: Vec<u8>,
 }
 impl OrgBuilder {
-    pub fn new(loc: Location, start_addr: u8) -> Self {
+    pub fn new(loc: Location, bank: u8, start_addr: u8) -> Self {
         Self {
             loc,
+            bank,
             start_addr,
             data: Vec::new(),
         }
@@ -97,9 +99,13 @@ impl OrgBuilder {
         let size = self.data.len() as u8;
         let org = Org {
             start_addr: self.start_addr,
+            bank: self.bank,
             size,
         };
         for other_org in orgs {
+            if other_org.bank != self.bank {
+                continue;
+            }
             if other_org.overlap(org) {
                 return Err(Located::new(
                     CodeGenError::OrgOverlap(org, *other_org),
@@ -118,6 +124,7 @@ impl OrgBuilder {
 #[derive(Clone, Copy)]
 pub struct Org {
     start_addr: u8,
+    bank: u8,
     size: u8,
 }
 impl Display for Org {
@@ -254,7 +261,7 @@ pub fn gen(tt: Vec<Located<Token>>) -> Result<Vec<Bank>, Located<CodeGenError>> 
                 if let Some(org) = &mut cur_org {
                     orgs.push(org.write(&mut cur_bank, &orgs)?);
                 }
-                cur_org = Some(OrgBuilder::new(token.location, addr));
+                cur_org = Some(OrgBuilder::new(token.location, cur_bank_num, addr));
             }
             Token::Bank(addr) => {
                 if let Some(org) = &mut cur_org {

@@ -109,7 +109,7 @@ fn parse_value<T: ParseHex + ParseBin + MaxValue>(
 ) -> std::result::Result<Option<Located<ValueToken<T>>>, Located<LexError>> {
     if token.starts_with("0x") {
         let value = T::parse_hex(&token[2..]).ok_or(LexError::located(
-            format!("Invalid {} bit hex literal", T::MAX_VALUE).into(),
+            format!("Invalid {} bit hex literal", T::BIT_COUNT).into(),
             location.clone(),
         ))?;
         return Ok(Some(Located::new(ValueToken::Const(value), location)));
@@ -164,7 +164,7 @@ fn parse_next_value<T: ParseBin + ParseHex + MaxValue>(
     match parse_value::<T>(token, parser.location())? {
         Some(v) => Ok(v),
         None => Err(LexError::located(
-            format!("Expected an {} bit value.", T::MAX_VALUE).into(),
+            format!("Expected an {} bit value.", T::BIT_COUNT).into(),
             parser.location(),
         )),
     }
