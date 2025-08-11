@@ -2,30 +2,42 @@
 bit-eater is a custom mpu designed by me based on the nna8 architecture
 
 
-## Memory map / Peripherals
+# Memory map / Peripherals
 
-### bit-eater1 (nna8v1)
+## bit-eater1 (nna8v1)
 
-| addr       | size   | function  |
-|------------|--------|-----------|
-| 0x00..0xEE | (0xEE) | ram rw    |
-| 0xEE..0xEF | (0x02) | keyboard  |
-| 0xEF..     | (0x10) | video mem |
+| addr   | size   | function  |
+|--------|--------|-----------|
+| ..0xEE | (0xEE) | EEPROM rw |
+| ..0xEF | (0x02) | keyboard  |
+| ..0xFF | (0x10) | video mem |
 
 > ![NOTE]
-> Ranges don't include the upper bound
+> Ranges don't include the lower bound
 >
 
-### bit-eater2 (nna8v2)
+## bit-eater2 (nna8v2)
 
-| bank | addr | size   | function   |
-|------|------|--------|------------|
-| 0xFF | 0x00 | (0x01) | port flags |
-| 0xFF | 0x01 | (0x01) | p0         |
-| 0xFF | 0x02 | (0x01) | p1         |
-| 0xEF | 0x00 | (0xFF) | video mem  |
+| bank   | size   | function  |
+|--------|--------|-----------|
+| ..0x0F | (0x10) | EEPROM    |
+| ..0xFD | (0xEE) | unused    |
+| 0xFE   | (0x01) | video mem |
+| 0xFF   | (0x01) | io bank   |
 
-### port flags
+> ![NOTE]
+> Ranges don't include the lower bound
+>
+
+### io bank
+
+| addr | size   | function   |
+|------|--------|------------|
+| 0x00 | (0x01) | port flags |
+| 0x01 | (0x01) | p0         |
+| 0x02 | (0x01) | p1         |
+
+#### port flags
 | bit | function |
 |-----|----------|
 | 1   | p0 ready |

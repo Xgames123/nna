@@ -71,9 +71,9 @@ instruction_set! {
         "eq"(0x10)("a":Reg,"b":Reg),
         "gt"(0x20)("a":Reg,"b":Reg),
         //flg
-            "flf"(0x30)(),
-            "sef"(0x3C)(),
-            "clf"(0x34)(),
+            "flf"(0x30)(), // 00
+            "sef"(0x3C)(), // 11
+            "clf"(0x34)(), // 01
         //? 0x4
         "bra"(0x50)("addr":4bit),
         "mco"(0x60)("co":CalOp),
@@ -84,8 +84,8 @@ instruction_set! {
         "mov"(0xB0)("dest":Reg,"src":Reg),
         "cal"(0xC0)("a":Reg,"b":Reg),
         "xor"(0xD0)("a":Reg,"b":Reg),
-        "inc"(0xE0)("reg":Reg,"amount":2bit),
-        "dec"(0xF0)("reg":Reg,"amount":2bit)
+        "inc"(0xE0)("reg":Reg,"amount":2bitnz),
+        "dec"(0xF0)("reg":Reg,"amount":2bitnz)
 
     }
 }

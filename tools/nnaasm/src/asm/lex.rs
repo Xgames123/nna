@@ -114,6 +114,13 @@ fn parse_value<T: ParseHex + ParseBin + MaxValue>(
         ))?;
         return Ok(Some(Located::new(ValueToken::Const(value), location)));
     }
+    if token.starts_with("0b") {
+        let value = T::parse_bin(&token[2..]).ok_or(LexError::located(
+            format!("Invalid {} bit binary literal", T::BIT_COUNT).into(),
+            location.clone(),
+        ))?;
+        return Ok(Some(Located::new(ValueToken::Const(value), location)));
+    }
 
     if token.starts_with("&") {
         let (token, ref_type) = if token.ends_with(".low") {
@@ -289,6 +296,37 @@ fn parse_op<I: Arch + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpTo
             Located::new(
                 OpToken::Full(op.into() | register0.value << 2 | register1.value),
                 loc.combine(register0.location).combine(register1.location),
+            )
+        }
+        OpArgs::ConstBit2Nz((_, arg0), _) => {
+            let register0 = parse_next_constarg(parser, arg0)?;
+            let value1 = match parse_next_value::<u4>(parser)? {
+                Located {
+                    location,
+                    value: ValueToken::Const(v),
+                } => {
+                    if v.into_low() > 4 || v.into_low() == 0 {
+                        return Err(LexError::static_located(
+                            "non zero 2 bit value is not allowed to be 0 or bigger than 4",
+                            location,
+                        ));
+                    }
+                    Located::new(u4::from_low(v.into_low() - 1), location)
+                }
+                Located {
+                    location,
+                    value: ValueToken::LabelRef(_, _),
+                } => {
+                    return Err(LexError::static_located(
+                        "label not allowed for 2 bit values",
+                        location,
+                    ))
+                }
+            };
+
+            Located::new(
+                OpToken::Full(op.into() | register0.value << 2 | value1.value.into_low()),
+                loc.combine(register0.location).combine(value1.location),
             )
         }
         OpArgs::ConstBit2((_, arg0), _) => {

@@ -37,6 +37,9 @@ pub enum OpArgs {
     /// 1 const arg as arg 0 and a 2 bit value as arg 1
     ConstBit2((&'static str, ConstArg), &'static str),
 
+    /// 1 const arg as arg 0 and a 2 bit value (non zero) as arg 1
+    ConstBit2Nz((&'static str, ConstArg), &'static str),
+
     /// 2 const args as arguments
     ConstConst((&'static str, ConstArg), (&'static str, ConstArg)),
     /// 1 argument that is a 4 bit value
@@ -63,6 +66,12 @@ impl Display for OpArgs {
                 f.write_str(" {")?;
                 f.write_str(*desc1)?;
                 f.write_str(":2bit}")?;
+            }
+            Self::ConstBit2Nz((desc0, arg0), desc1) => {
+                write_const_arg(f, *arg0, desc0)?;
+                f.write_str(" {")?;
+                f.write_str(*desc1)?;
+                f.write_str(":2bitnz}")?;
             }
             Self::ConstConst((desc0, arg0), (desc1, arg1)) => {
                 write_const_arg(f, *arg0, desc0)?;
@@ -93,6 +102,9 @@ macro_rules! opargs_impl {
     };
     (($desc1:literal:$const:ty, $desc2:literal:2bit)) => {
         crate::OpArgs::ConstBit2(($desc1, crate::ConstArg::new::<$const>()), $desc2)
+    };
+    (($desc1:literal:$const:ty, $desc2:literal:2bitnz)) => {
+        crate::OpArgs::ConstBit2Nz(($desc1, crate::ConstArg::new::<$const>()), $desc2)
     };
     (($desc1:literal:$const1:ty, $desc2:literal:$const2:ty)) => {
         crate::OpArgs::ConstConst(

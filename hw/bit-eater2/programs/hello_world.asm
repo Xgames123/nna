@@ -16,8 +16,8 @@ mdb r0 ; set bank back to 0
 
 mrd r2 r1 ; read current char into r2
 
-; switch to right bank
-dec r0 0x1 ; r0 = 0xFF
+; switch to video mem bank
+dec r0 0x2 ; r0 = 0xFF
 mdb r0 ; set db to 0xFF
 
 ; check for null
@@ -57,6 +57,6 @@ message:
 0x21 ; !
 0x00
 
-.bank 0xFF
+.bank 0xFE
 .org 0x00
 video_mem:
