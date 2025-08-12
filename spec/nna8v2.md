@@ -88,8 +88,8 @@ Move the calculate operation into the *co* register
 |-----|------|------|
 | add | 00   | 00   |
 | sub | 00   | 01   |
-| div | 00   | 10   |
-| mul | 00   | 11   |
+| mul | 00   | 10   |
+| div | 00   | 11   |
 | shl | 01   | 00   |
 | shr | 01   | 01   |
 | rol | 01   | 10   |

@@ -5,10 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use libnna::{
-    instruction_sets::{Nna8v1, Nna8v2},
-    Architecture,
-};
+use libnna::Architecture;
 
 use self::lex::parse_lex;
 pub use codegen::Bank;
@@ -65,6 +62,29 @@ impl<T> Deref for Located<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.value
+    }
+}
+impl<T, E> Located<Result<T, E>> {
+    /// Lift the result to the toplevel
+    pub fn lift(self) -> Result<Located<T>, Located<E>> {
+        match self.value {
+            Ok(v) => Ok(Located::new(v, self.location)),
+            Err(v) => Err(Located::new(v, self.location)),
+        }
+    }
+    /// Lift the result to the toplevel (only wrap the Ok variant in a locate)
+    pub fn lift_ok(self) -> Result<Located<T>, E> {
+        match self.lift() {
+            Ok(v) => Ok(v),
+            Err(v) => Err(v.value),
+        }
+    }
+    /// Lift the result to the toplevel (only wrap the Err variant in a locate)
+    pub fn lift_err(self) -> Result<T, Located<E>> {
+        match self.lift() {
+            Ok(v) => Ok(v.value),
+            Err(v) => Err(v),
+        }
     }
 }
 
@@ -193,11 +213,8 @@ fn resolve_includes<'a>(
 }
 
 pub fn assemble(filename: Rc<str>, input: &str, arch: Architecture) -> Result<Vec<Bank>, AsmError> {
-    let mut parsed = match arch {
-        Architecture::Nna8v1 => parse_lex::<Nna8v1>(input),
-        Architecture::Nna8v2 => parse_lex::<Nna8v2>(input),
-    }
-    .map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
+    let mut parsed =
+        parse_lex(input, arch).map_err(|lex| lex.into_asm_error(&input, filename.clone()))?;
     resolve_includes(&mut parsed, &input, filename.clone())?;
     Ok(codegen::gen(parsed).map_err(|cg| cg.into_asm_error(&input, filename.clone()))?)
 }
@@ -208,20 +225,36 @@ mod tests {
 
     use super::Located;
 
-    fn assemble_assert(code: &str, bin: Vec<&[u8]>) {
+    fn assemble_assert_arch(code: &str, bin: Vec<&[u8]>, arch: Architecture) {
         let mut banks = Vec::new();
         for bin in bin {
             let mut full_bin = [0; 256];
             full_bin[..bin.len()].copy_from_slice(bin);
             banks.push(full_bin);
         }
-        match super::assemble("test".into(), code, Architecture::Nna8v1) {
-            Ok(gen_bin) => assert_eq!(gen_bin, banks),
+        match super::assemble("test".into(), code, arch) {
+            Ok(gen_bin) => {
+                if gen_bin != banks {
+                    eprintln!("generated: (hex)");
+                    for bank in gen_bin {
+                        eprintln!("{:02X?}, ", bank);
+                    }
+                    eprintln!("\nexpected: (hex)");
+                    for bank in banks {
+                        eprintln!("{:02X?}, ", bank);
+                    }
+                    assert!(false);
+                }
+            }
             Err(e) => {
                 e.print();
                 assert!(false)
             }
         }
+    }
+
+    fn assemble_assert(code: &str, bin: Vec<&[u8]>) {
+        assemble_assert_arch(code, bin, Architecture::Nna8v1)
     }
 
     fn assemble_assert_err(code: &str, err: Located<&str>) {
@@ -370,5 +403,33 @@ nop
             code,
             Located::new("Address is not reachable from here.", (10, 0..17).into()),
         );
+    }
+
+    mod instruction {
+        use super::{assemble_assert, assemble_assert_arch};
+        use libnna::Architecture;
+
+        #[test]
+        fn bra() {
+            let code = r#"
+.org 0x00
+0x00
+target:
+0x00
+0x00
+0x00
+bra &target.low
+        "#;
+            assemble_assert(code, vec![&[0x00, 0x00, 0x00, 0x00, 0x61]]);
+        }
+
+        #[test]
+        fn mco() {
+            let code = r#"
+.org 0x00
+mco mul
+        "#;
+            assemble_assert_arch(code, vec![&[0x62]], Architecture::Nna8v2);
+        }
     }
 }

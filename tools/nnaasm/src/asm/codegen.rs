@@ -288,9 +288,8 @@ pub fn gen(tt: Vec<Located<Token>>) -> Result<Vec<Bank>, Located<CodeGenError>> 
                 let org = org(&mut cur_org, token.location)?;
                 org.data.extend_from_slice(&bytes);
             }
-            Token::IncludeBytes(_) => {
-                panic!("codegen can't work with include_bytes tokens");
-            }
+            Token::IncludeBytes(_) => {}
+            Token::Arch(_) => {}
         }
     }
     //write last org

@@ -1,4 +1,4 @@
-
+.arch "nna8v2"
 .org 0x00
 lih &message.high
 mov r1 r0

@@ -4,7 +4,10 @@ use std::str::FromStr;
 
 use super::parse::Parser;
 use super::{IntoAsmError, Located, Location};
-use libnna::{u2, u4, Arch, ConstArg, MaxValue, OpArgs, ParseBin, ParseHex};
+use libnna::instruction_sets::{Nna8v1, Nna8v2};
+use libnna::{
+    u2, u4, Arch, Architecture, ConstArg, MaxValue, OpArg, OpArgType, OpArgs, ParseBin, ParseHex,
+};
 
 type Result<T> = std::result::Result<Located<T>, Located<LexError>>;
 
@@ -44,6 +47,14 @@ pub enum OpToken {
     Full(u8),
     LabelRef(u8, Box<str>, RefType),
 }
+impl OpToken {
+    fn full_or<E>(self, e: E) -> std::result::Result<u8, E> {
+        match self {
+            Self::Full(v) => Ok(v),
+            Self::LabelRef(_, _, _) => Err(e),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
@@ -51,10 +62,11 @@ pub enum Token {
     Org(u8),
     Value(ValueToken<u8>),
     Reachable(ValueToken<u8>),
-    IncludeBytes(PathBuf),
     Bank(u8),
     Bytes(Vec<u8>),
     Op(OpToken),
+    Arch(Architecture),
+    IncludeBytes(PathBuf),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -215,7 +227,7 @@ fn parse_next_str<'a>(parser: &'a mut Parser) -> Result<&'a str> {
         ));
     }
 
-    Ok(Located::new(token, parser.location()))
+    Ok(Located::new(&token[1..token.len() - 1], parser.location()))
 }
 
 fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<Token> {
@@ -224,14 +236,14 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
         "org" => {
             let addr = parse_next_hex8(parser)?;
             return Ok(Located::new(
-                Token::Org(addr.value),
+                Token::Org(addr.value).into(),
                 token_loc.combine(addr.location),
             ));
         }
         "bank" => {
             let addr = parse_next_hex8(parser)?;
             return Ok(Located::new(
-                Token::Bank(addr.value),
+                Token::Bank(addr.value).into(),
                 token_loc.combine(addr.location),
             ));
         }
@@ -239,7 +251,7 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
             let start = parse_next_value::<u8>(parser)?;
 
             return Ok(Located::new(
-                Token::Reachable(start.value),
+                Token::Reachable(start.value).into(),
                 token_loc.combine(start.location),
             ));
         }
@@ -251,6 +263,17 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
                 token_loc.combine(parser.location()),
             ));
         }
+        "arch" => {
+            let arch_t = parse_next_str(parser)?;
+            let arch = Architecture::from_str(arch_t.value).ok_or(LexError::static_located(
+                "Unknown architecture name",
+                arch_t.location.clone(),
+            ))?;
+            return Ok(Located::new(
+                Token::Arch(arch),
+                token_loc.combine(arch_t.location),
+            ));
+        }
         _ => {
             return Err(LexError::static_located(
                 "Unknown compiler directive",
@@ -260,47 +283,18 @@ fn parse_compiler_directive<'a>(token: &'a str, parser: &mut Parser) -> Result<T
     }
 }
 
-fn parse_op<I: Arch + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpToken> {
-    let op = I::try_from_str(token).ok_or(LexError::static_located(
-        "Unknown operation. See spec for available operations",
-        parser.location(),
-    ))?;
-    let loc = parser.location();
-    Ok(match op.args() {
-        OpArgs::None => Located::new(OpToken::Full(op.into()), loc),
-        OpArgs::Bit4(_) => {
-            let value = parse_next_value::<u4>(parser)?;
-            let token = match value.value {
-                ValueToken4::Const(value) => OpToken::Full(op.into() | value.into_low()),
-                ValueToken4::LabelRef(name, ref_type) => {
-                    if ref_type.is_full() {
-                        return Err(LexError::static_located("Cant fit a full sized reference (8 bits) into 4 bits. Use .low or .high sufix to get the low or high part of the reference.", parser.location()));
-                    }
-                    OpToken::LabelRef(op.into(), name, ref_type)
-                }
-            };
-            Located::new(token, loc.combine(value.location))
+fn parse_oparg(arg: OpArg, big: bool, parser: &mut Parser) -> Result<OpToken> {
+    match arg.ty {
+        OpArgType::None => Ok(Located::new(OpToken::Full(0), parser.location())),
+        OpArgType::Const(c) => {
+            let arg = parse_next_constarg(parser, c)?;
+            Ok(arg.map(|v| OpToken::Full(v)))
         }
-        OpArgs::ConstNone((_, arg)) => {
-            let register = parse_next_constarg(parser, arg)?;
-
-            Located::new(
-                OpToken::Full(op.into() | (register.value << 2)),
-                loc.combine(register.location),
-            )
-        }
-        OpArgs::ConstConst((_, arg0), (_, arg1)) => {
-            let register0 = parse_next_constarg(parser, arg0)?;
-            let register1 = parse_next_constarg(parser, arg1)?;
-
-            Located::new(
-                OpToken::Full(op.into() | register0.value << 2 | register1.value),
-                loc.combine(register0.location).combine(register1.location),
-            )
-        }
-        OpArgs::ConstBit2Nz((_, arg0), _) => {
-            let register0 = parse_next_constarg(parser, arg0)?;
-            let value1 = match parse_next_value::<u4>(parser)? {
+        OpArgType::Value { nz: true } => {
+            if big {
+                panic!("Generating code for 4 bit nonzero values is currently not supported. But an instruction in the current arch exists that requires it.");
+            }
+            Ok(match parse_next_value::<u4>(parser)? {
                 Located {
                     location,
                     value: ValueToken::Const(v),
@@ -311,7 +305,7 @@ fn parse_op<I: Arch + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpTo
                             location,
                         ));
                     }
-                    Located::new(u4::from_low(v.into_low() - 1), location)
+                    Located::new(OpToken::Full(v.into_low() - 1), location)
                 }
                 Located {
                     location,
@@ -322,20 +316,26 @@ fn parse_op<I: Arch + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpTo
                         location,
                     ))
                 }
-            };
-
-            Located::new(
-                OpToken::Full(op.into() | register0.value << 2 | value1.value.into_low()),
-                loc.combine(register0.location).combine(value1.location),
-            )
+            })
         }
-        OpArgs::ConstBit2((_, arg0), _) => {
-            let register0 = parse_next_constarg(parser, arg0)?;
-            let value1 = match parse_next_value::<u2>(parser)? {
+        OpArgType::Value { nz: false } => Ok(if big {
+            let value = parse_next_value::<u4>(parser)?;
+            let token = match value.value {
+                ValueToken4::Const(value) => OpToken::Full(value.into_low()),
+                ValueToken4::LabelRef(name, ref_type) => {
+                    if ref_type.is_full() {
+                        return Err(LexError::static_located("Cant fit a full sized reference (8 bits) into 4 bits. Use .low or .high suffix to get the low or high part of the reference.", parser.location()));
+                    }
+                    OpToken::LabelRef(0, name, ref_type)
+                }
+            };
+            Located::new(token, parser.location().combine(value.location))
+        } else {
+            match parse_next_value::<u2>(parser)? {
                 Located {
                     location,
                     value: ValueToken::Const(v),
-                } => Located::new(v, location),
+                } => Located::new(v.into_low(), location),
                 Located {
                     location,
                     value: ValueToken::LabelRef(_, _),
@@ -345,23 +345,59 @@ fn parse_op<I: Arch + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpTo
                         location,
                     ))
                 }
-            };
+            }
+            .map(|v| OpToken::Full(v))
+        }),
+    }
+}
+
+fn parse_op<I: Arch + Into<u8>>(token: &str, parser: &mut Parser) -> Result<OpToken> {
+    let op = I::try_from_str(token).ok_or(LexError::static_located(
+        "Unknown operation. See spec for available operations",
+        parser.location(),
+    ))?;
+    Ok(match op.args() {
+        OpArgs::Arg(a) => parse_oparg(a.0, true, parser)?.map(|t| match t {
+            OpToken::Full(v) => OpToken::Full(op.into() | v),
+            OpToken::LabelRef(v, name, ty) => OpToken::LabelRef(op.into() | v, name, ty),
+        }),
+        OpArgs::ArgArg(a, b) => {
+            let a = parse_oparg(a, false, parser)?
+                .map(|a| {
+                    a.full_or(LexError::static_located(
+                        "Cant use a reference for a 2 bit value",
+                        parser.location(),
+                    ))
+                })
+                .lift_ok()?;
+            let b = parse_oparg(b, false, parser)?
+                .map(|b| {
+                    b.full_or(LexError::static_located(
+                        "Cant use a refference for a 2 bit value",
+                        parser.location(),
+                    ))
+                })
+                .lift_ok()?;
 
             Located::new(
-                OpToken::Full(op.into() | register0.value << 2 | value1.value.into_low()),
-                loc.combine(register0.location).combine(value1.location),
+                OpToken::Full(op.into() | a.value << 2 | b.value),
+                a.location.combine(b.location),
             )
         }
     })
 }
 
-pub fn parse_lex<I: Arch + Into<u8>>(
+pub fn parse_lex(
     input: &str,
+    default_arch: Architecture,
 ) -> std::result::Result<Vec<Located<Token>>, Located<LexError>> {
     let mut out_vec = Vec::new();
     let Some(mut parser) = Parser::new(input) else {
         return Ok(out_vec);
     };
+
+    let mut arch = default_arch;
+    let mut parsed_ops = false;
 
     loop {
         let Some(token) = parser.next() else {
@@ -369,7 +405,20 @@ pub fn parse_lex<I: Arch + Into<u8>>(
         };
         //println!("token: '{}'", token);
         if token.starts_with('.') {
-            out_vec.push(parse_compiler_directive(&token[1..], &mut parser)?);
+            let t = parse_compiler_directive(&token[1..], &mut parser)?;
+            match t.value {
+                Token::Arch(a) => {
+                    if parsed_ops {
+                        return Err(LexError::static_located(
+                            "Can't use .arch after some operations have been parsed.",
+                            parser.location(),
+                        ));
+                    }
+                    arch = a
+                }
+                _ => {}
+            };
+            out_vec.push(t);
             continue;
         }
         if token.ends_with(':') {
@@ -389,14 +438,19 @@ pub fn parse_lex<I: Arch + Into<u8>>(
             continue;
         }
 
-        out_vec.push(parse_op::<I>(token, &mut parser)?.map(|opt| Token::Op(opt)));
+        parsed_ops = true;
+        out_vec.push(
+            match arch {
+                Architecture::Nna8v1 => parse_op::<Nna8v1>(token, &mut parser),
+                Architecture::Nna8v2 => parse_op::<Nna8v2>(token, &mut parser),
+            }?
+            .map(|opt| Token::Op(opt)),
+        );
     }
 }
 
 #[cfg(test)]
 mod test {
-    use libnna::instruction_sets::Nna8v1;
-
     use crate::asm::{lex::Token, Located};
 
     use super::parse_lex;
@@ -408,8 +462,22 @@ mod test {
 
 ;comment "#;
         assert_eq!(
-            parse_lex::<Nna8v1>(code),
+            parse_lex(code, libnna::Architecture::Nna8v1),
             Ok(vec![Located::new(Token::Org(0xAB), (1, 0..9).into())])
+        )
+    }
+
+    #[test]
+    fn parse_arch() {
+        let code = r#".arch "nna8v2"
+.org 0xAB
+        "#;
+        assert_eq!(
+            parse_lex(code, libnna::Architecture::Nna8v1),
+            Ok(vec![
+                Located::new(Token::Arch(libnna::Architecture::Nna8v2), (0, 0..14).into()),
+                Located::new(Token::Org(0xAB), (1, 0..9).into())
+            ])
         )
     }
 }

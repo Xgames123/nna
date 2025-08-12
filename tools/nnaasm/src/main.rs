@@ -27,7 +27,7 @@ struct Cli {
     #[arg(default_value = "-")]
     input: String,
 
-    /// The instruction set to compile for
+    /// The instruction set to compile for (takes less precedence than a .arch directive)
     #[arg(short = 'a', long, default_value = "nna8v1")]
     arch: Architecture,
 
