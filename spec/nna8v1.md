@@ -1,18 +1,19 @@
 # nna8v1
 
 # Flag
+
 The flag is a bit that gets set or reset by some instructions (during overflow, companions, ...).
 
 # Registers
+
 > [!NOTE]
 > All registers including pc are reset to 0 when the device boots up.
 
 > **op access**
 > The register can be accessed in operations. Ex. mov r0 r2
->
 
 | name | size | description                                          | op access |
-|------|------|------------------------------------------------------|-----------|
+| ---- | ---- | ---------------------------------------------------- | --------- |
 | r0   | 8    | General purpose, lih lim instructions load into here | yes       |
 | r1   | 8    | General purpose                                      | yes       |
 | r2   | 8    | General purpose                                      | yes       |
@@ -20,11 +21,12 @@ The flag is a bit that gets set or reset by some instructions (during overflow, 
 | pc   | 8    | Program counter                                      | no        |
 
 # Instructions
+
 Instructions are 1 byte where the first 4 bits are the opcode followed by 2 arguments each 2 bits.
 Parameters that take a register are noted using: [description].
 
 | name | opcode |  arg0  |   arg1   | description                                                    | cycles | flag           |
-|------|--------|:------:|:--------:|----------------------------------------------------------------|--------|----------------|
+| ---- | ------ | :----: | :------: | -------------------------------------------------------------- | ------ | -------------- |
 | nop  | 0x0    |   00   |    00    | Does nothing.                                                  | 1      | /              |
 | brk  | 0x0    |   01   |    00    | Break the debugger.                                            | 1      | /              |
 | flf  | 0x0    |   10   |    00    | Flips flag (if flag was set reset else set)                    | 1      | write          |
@@ -48,4 +50,19 @@ Parameters that take a register are noted using: [description].
 | or   | 0xE    |  [a]   |   [b]    | or's [a] and [b] and stores the result in [a].                 | 1      | /              |
 | xor  | 0xF    |  [a]   |   [b]    | xor's [a] and [b] and stores the result in [a].                | 1      | /              |
 
+# Memory map / Peripherals
 
+| addr   | size   | function  |
+| ------ | ------ | --------- |
+| ..0xEE | (0xEE) | EEPROM rw |
+| ..0xEF | (0x02) | keyboard  |
+| ..0xFF | (0x10) | video mem |
+
+> ![NOTE]
+> Ranges don't include the lower bound
+
+# Video
+
+| res  | mode |
+| ---- | ---- |
+| 16x8 | bw   |

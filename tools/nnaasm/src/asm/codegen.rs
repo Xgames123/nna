@@ -9,6 +9,7 @@ pub type Bank = [u8; 256];
 pub enum CodeGenError {
     NoOrg(),
     OrgOverlap(Org, Org),
+    OrgOutOfBounds(usize),
     LabelNotDefined(Box<str>),
     ReachableAssertionFailed,
 }
@@ -24,6 +25,9 @@ impl IntoAsmError for Located<CodeGenError> {
             },
             CodeGenError::ReachableAssertionFailed => {
                 format!("Address is not reachable from here.")
+            }
+            CodeGenError::OrgOutOfBounds(size) => {
+                format!("This org (size: {:#04x}) extends past the bounds of the bank it is in.", size)
             }
         };
         super::AsmError {
@@ -96,12 +100,19 @@ impl OrgBuilder {
 
     #[inline]
     pub fn write(&mut self, bin: &mut Bank, orgs: &[Org]) -> Result<Org, Located<CodeGenError>> {
-        let size = self.data.len() as u8;
+        if self.start_addr as usize + self.data.len() >= bin.len() {
+            return Err(Located::new(
+                CodeGenError::OrgOutOfBounds(self.data.len()),
+                self.loc.clone(),
+            ));
+        }
+
         let org = Org {
             start_addr: self.start_addr,
             bank: self.bank,
-            size,
+            size: self.data.len() as u8,
         };
+
         for other_org in orgs {
             if other_org.bank != self.bank {
                 continue;

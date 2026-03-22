@@ -106,13 +106,15 @@ impl IntoAsmError for Located<LexError> {
 }
 
 fn parse_identifier<'a>(str: &'a str) -> Option<&'a str> {
+    if str.starts_with(|c: char| c.is_ascii_digit()) {
+        return None;
+    }
     for char in str.chars() {
-        if !char.is_alphabetic() && char != '_' {
-            println!("char: {}", char);
+        if !char.is_alphanumeric() && char != '_' {
             return None;
         }
     }
-    Some(&str[1..])
+    Some(str)
 }
 
 fn parse_value<T: ParseHex + ParseBin + MaxValue>(
@@ -135,12 +137,13 @@ fn parse_value<T: ParseHex + ParseBin + MaxValue>(
     }
 
     if token.starts_with("&") {
-        let (token, ref_type) = if token.ends_with(".low") {
-            (&token[1..token.len() - 4], RefType::Low)
-        } else if token.ends_with(".high") {
-            (&token[1..token.len() - 5], RefType::High)
+        let token = &token[1..];
+        let (token, ref_type) = if let Some(token) = token.strip_suffix(".low") {
+            (token, RefType::Low)
+        } else if let Some(token) = token.strip_suffix(".high") {
+            (token, RefType::High)
         } else {
-            (&token[1..], RefType::Full)
+            (token, RefType::Full)
         };
         let value = parse_identifier(&token).ok_or(LexError::static_located(
             "Label ref contains invalid characters.",

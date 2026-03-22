@@ -7,7 +7,6 @@ lil &video_mem.low
 lih &video_mem.high
 mov r3 r0 ; r3 target
 
-brk
 .org 0x10
 loop:
 ; switch to data
@@ -17,8 +16,8 @@ mdb r0 ; set bank back to 0
 mrd r2 r1 ; read current char into r2
 
 ; switch to video mem bank
-dec r0 0x2 ; r0 = 0xFF
-mdb r0 ; set db to 0xFF
+dec r0 0x2 ; r0 = 0xFE
+mdb r0 ; set db to 0xFE
 
 ; check for null
 xor r0 r0 ; zero r0

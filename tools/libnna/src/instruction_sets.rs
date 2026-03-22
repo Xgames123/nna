@@ -10,7 +10,7 @@ pub struct CalOp;
 impl ConstOpArg for CalOp {
     const NAME: &'static str = "co";
     const VARIANTS: &'static [&'static str] = &[
-        "add", "sub", "mul", "div", "shl", "shr", "rol", "ror", "and", "or",
+        "add", "sub", "mul", "div", "shl", "shr", "rol", "ror", "and", "or", "not", "mod",
     ];
 }
 
