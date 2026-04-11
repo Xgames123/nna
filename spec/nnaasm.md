@@ -1,3 +1,7 @@
+# Installation
+
+Run `tools/install`
+
 # Assembly language (nnaasm)
 
 ```asm

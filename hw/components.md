@@ -6,3 +6,7 @@
 # logic
 
 - 74HC688 (8 bit comparator)
+
+# high performance EEPROM memory
+
+- [M95P16](https://www.mouser.be/ProductDetail/STMicroelectronics/M95P16-EXMNT-E?qs=olJun0bQHM8xM0FLMnUgSg%3D%3D)
