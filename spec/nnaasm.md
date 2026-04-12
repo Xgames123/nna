@@ -1,6 +1,12 @@
+# nnaasm
+
+Assembler for the nna architectures
+
 # Installation
 
-Run `tools/install.sh`
+- Install cargo and the stable version of the rust compiler
+- Run `tools/install.sh`
+- To uninstall run `tools/install.sh -u`
 
 # Assembly language (nnaasm)
 
@@ -9,6 +15,14 @@ An overview of the nnaasm assembly language. [Information about the architecture
 ## Assembler directives
 
 Assembler directives are instructions for the assembler. You can recognize them with the leading dot.
+
+### `.arch`
+
+Sets the target architecture to assemble for. When not set you can use the `-a` option on the command line.
+
+```
+.arch "nna8v3"
+```
 
 ### `.org`
 

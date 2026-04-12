@@ -1,6 +1,6 @@
 [package]
 name = "nnaasm"
-description="Assembler for for the nna assembly language"
+description="Assembler for the nna processor architectures"
 version = "1.0.0"
 authors.workspace=true
 edition.workspace=true
