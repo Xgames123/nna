@@ -1,6 +1,15 @@
 # nna8v2
 
-An 8 bit general purpose and video processor
+An 8 bit general purpose and video processor.
+
+# Variants
+
+Variants differ in the peripherals available
+
+| variant      | description                                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| nna8v2**v**  | Has a video buffer located at address 0xFE00..0xFEFF and is capable of displaying a 16x16 image with 256 colors |
+| nna8v2**tt** | Changes intended for tapeout at [tinytapeout](https://tinytapeout.com)                                          |
 
 # Memory
 
@@ -11,25 +20,27 @@ All banks are executable. Switching the executing bank can be done using the mpb
 
 ## Memory map
 
-| addr     | size     | function  |
-| -------- | -------- | --------- |
-| ..0x1000 | (0x1000) | EEPROM    |
-| ..       | (0xEE)   | unused    |
-| 0xFE00   | (0xFF)   | video mem |
-| 0xFF00   | (0xFF)   | IO bank   |
+| addr     | size     | function |
+| -------- | -------- | -------- |
+| ..0x1000 | (0x1000) | Flash    |
+| ..       | (0xEF)   | RAM      |
+| 0xFF00   | (0xFF)   | IO bank  |
 
 > ![NOTE]
 > Ranges don't include the lower bound
 
+> ![NOTE] nna8v2v
+> `nna8v2v` as high speed video memory is available at 0xFE00->0xFEFF instead of ram
+
 ## IO bank
 
-| addr | size   | function |
-| ---- | ------ | -------- |
-| 0x00 | (0x01) | _pf_     |
-| 0x01 | (0x01) | _p0_     |
-| 0x02 | (0x01) | _p1_     |
-| 0x03 | (0x01) | _vm_     |
-| ..   | -      | unused   |
+| addr | size   | function | variants    |
+| ---- | ------ | -------- | ----------- |
+| 0x00 | (0x01) | _pf_     |             |
+| 0x01 | (0x01) | _p0_     |             |
+| 0x02 | (0x01) | _p1_     |             |
+| 0x03 | (0x01) | _vm_     | nna8v2**v** |
+| ..   | -      | unused   |             |
 
 # Flag
 
@@ -75,7 +86,7 @@ Parameters that take a register are noted using: [description].
 
 | name | opcode |  arg0   |   arg1   | description                                                                      | cycles           | flag          | reg-io      |
 | ---- | ------ | :-----: | :------: | -------------------------------------------------------------------------------- | ---------------- | ------------- | ----------- |
-| sin  | 0x0    |  {ins}  |  {ins}   | Runs the sub instruction {ins}.                                                  | 1-2              | -             | w(dp) w(db) |
+| sin  | 0x0    |  {ins}  |  {ins}   | Executes the sub instruction {ins}.                                              | 1-2              | -             | w(dp) w(db) |
 | eq   | 0x1    |   [a]   |   [b]    | Sets the overflow flag to the result of !([a] == [b]).                           | -                | write         | r           |
 | gt   | 0x2    |   [a]   |   [b]    | Sets the overflow flag to the result of !([a] > [b]).                            | -                | write         | r           |
 | flg  | 0x3    |  {val}  | [unused] | Flip, set or reset the flag                                                      | -                | -             | -           |
@@ -89,8 +100,8 @@ Parameters that take a register are noted using: [description].
 | mov  | 0xB    | [dest]  | [source] | Copies (moves) the value from [source] into [dest].                              | -                | -             | rw          |
 | cal  | 0xC    |   [a]   |   [b]    | Executes the math operation in _co_ on [a] and [b] and stores the result in [a]. | -                | overflow      | rw r(co)    |
 | xor  | 0xD    |   [a]   |   [b]    | xor's [a] and [b] and stores the result in [a].                                  | -                | -             | rw          |
-| inc  | 0xE    |  [reg]  | {amount} | Increment [reg] by {amount}                                                      | -                | overflow      | rw          |
-| dec  | 0xF    |  [reg]  | {amount} | Decrement [reg] by {amount}                                                      | -                | overflow      | rw          |
+| inc  | 0xE    |  [reg]  | {amount} | Increment [reg] by {amount}+1                                                    | -                | overflow      | rw          |
+| dec  | 0xF    |  [reg]  | {amount} | Decrement [reg] by {amount}+1                                                    | -                | overflow      | rw          |
 
 > [!NOTE]
 > A '-' in the cycles column means 1 cycle and is done for readability
@@ -165,53 +176,10 @@ There are two ps/2 IO ports available.
 > Reading a 1 from the ready flag indicates the port has fully received the data.
 > writing a 0 to the ready flag starts receiving the next byte from the port
 
-# Video modes
+# Video modes (only on nna8v2v)
 
 The current video mode is stored in the _vm_ register.
 
 | mode | res   | colors |
 | ---- | ----- | ------ |
 | 0x01 | 16x16 | 256    |
-
-# Hardware Buses
-
-Information of buses and wires
-
-## Instruction
-
-- `curop` The opcode of current instruction.
-- `arg` The combined arguments of the current instruction.
-- `arg0` First argument of the current instruction
-- `arg1` Second argument of the current instruction
-- `xcycle` Indicates that the current clock cycle is the second cycle of a two cycle instruction. During a second cycle the databus is released by _pc_.
-- `xcycle_next` Indicates that the next clock cycle will be an xcycle
-
-### cal
-
-Related to the cal instruction
-
-- `calbus` The answer of the calculation in `co` applied between `regout_arg0` and `regout_arg1`
-- `co_add` high when the `co` register contains the add instruction
-
-## Data
-
-- `databus` Contains the data that has been read or will be written this cycle;
-- `addrbus` Contains the memory location were the data on the `databus` will be read or written.
-- `bankbus` Contains the currently selected bank.
-- `addrbus_full` Combined `addrbus` and `bankbus` in big endian format.
-- `addr_mainmem` Indicates that the address on `addrbus_full` is in main memory.
-- `dwrite` Data write. Signals that current instruction wants to write the data on `databus` to the location in `addrbus`.
-- `dread` Data read. Signals that current instruction wants to read the data on location `addrbus`.
-- `drw` Indicates that the processor wants to read or write data.
-
-### Registries
-
-- `selreg` Selected register, value is based on arg0 and extra logic to handle lil and lih
-- `regin` Data that will be written to the selected register
-- `reg_we` Indicates that data on regin will be written to the selected register
-
-## Video
-
-- `addr_video` Indicates that the address on `addrbus_full` is in video memory.
-- `dwrite_video` Indicates that the processor wants to write to a memory location in video memory
-- `dwrite_video` Indicates that the processor wants to read a location in video memory

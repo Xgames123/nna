@@ -1,6 +1,6 @@
 ; Print hello world character per character to the display
 
-.arch "nna8v2"
+.arch "nna8v3"
 .org 0x00
 
 lil &message.low
@@ -16,7 +16,6 @@ mrd r1 r1 ; deref message_ptr
 .org 0x08
 
 loop:
-clf
 
 ; load print func
 lil &print_char.low
@@ -36,8 +35,6 @@ spin:
 brk
 inc r0 0x1
 bra &spin.low .reachable &spin
-
-clf
 
 
 ; Increment message_ptr

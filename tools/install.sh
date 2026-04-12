@@ -1,7 +1,11 @@
 #!/bin/bash
+set -e
+
 HELP=$(cat <<END
-Usage: install.sh [-u]
-Installs the nna dev tools
+Usage: $0 [-u]
+Builds and installs the nna dev tools (requires rust compiler)
+
+Options:
  -u   uninstall instead of install
 END
 )
@@ -13,7 +17,7 @@ if [[ "$1" = "--help" ]] ; then
 fi
 
 if [ "$(whoami)" = "root" ] ; then
-  echo "Don't run as root"
+  echo "Don't run as root."
   exit 1
 fi
 
@@ -32,10 +36,9 @@ for tool in $TOOLS ; do
     echo "Build failed"
     exit 1
   fi
-  if ! sudo cp target/release/$tool /usr/local/bin/$tool ; then
-    exit 1
-  fi
-  if ! sudo chmod +x /usr/local/bin/$tool ; then
-    exit 1
-  fi
+  echo "Copying files to /usr/local/bin..."
+  sudo cp target/release/$tool /usr/local/bin/$tool
+  sudo chmod +x /usr/local/bin/$tool
 done
+
+echo "DONE (Run 'tools/install.sh -u' to uninstall)"
