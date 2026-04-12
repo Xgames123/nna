@@ -1,15 +1,16 @@
 # nna8v2
 
-An 8 bit general purpose and video processor.
+An 8 bit general purpose processor.
 
 # Variants
 
-Variants differ in the peripherals available
+Variants differ in the peripherals available. Multiple variant tags can be combined. For example nna8v2vp has a video buffer and two memory mapped PS/2 ports
 
-| variant      | description                                                                                                     |
-| ------------ | --------------------------------------------------------------------------------------------------------------- |
-| nna8v2**v**  | Has a video buffer located at address 0xFE00..0xFEFF and is capable of displaying a 16x16 image with 256 colors |
-| nna8v2**tt** | Changes intended for tapeout at [tinytapeout](https://tinytapeout.com)                                          |
+| variant     | description                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------ |
+| nna8v2**v** | Has a video buffer located at address 0xFE00..0xFEFF and is capable of displaying a 16x16 image with 256 colors over VGA |
+| nna8v2**p** | Has two memory mapped PS/2 ports available                                                                               |
+| nna8v2**u** | Has a memory mapped UART available                                                                                       |
 
 # Memory
 
@@ -20,14 +21,17 @@ All banks are executable. Switching the executing bank can be done using the mpb
 
 ## Memory map
 
-| addr     | size     | function |
-| -------- | -------- | -------- |
-| ..0x1000 | (0x1000) | Flash    |
-| ..       | (0xEF)   | RAM      |
-| 0xFF00   | (0xFF)   | IO bank  |
+| addr     | size     | function         |
+| -------- | -------- | ---------------- |
+| ..0x1000 | (0x1000) | Flash (readonly) |
+| ..       | (0xEF)   | RAM              |
+| 0xFF00   | (0xFF)   | IO bank          |
 
 > ![NOTE]
 > Ranges don't include the lower bound
+
+> ![NOTE] unmapped IO access
+> Writes to unmapped addresses on the IO bank wil write to void and reads will result in zero
 
 > ![NOTE] nna8v2v
 > `nna8v2v` as high speed video memory is available at 0xFE00->0xFEFF instead of ram
@@ -61,19 +65,19 @@ The processor contains a single flag latch that get set or reset by some instruc
 | _r2_ | 8    | General purpose                                            | mov    |
 | _r3_ | 8    | General purpose                                            | mov    |
 | _pc_ | 8    | Program counter                                            | -      |
-| _co_ | 4    | Calc operation, Used by cal instruction.                   | cal    |
+| _co_ | 4    | Calc operation, Used by cal instruction.                   | mco    |
 | _db_ | 8    | Current bank for mwr and mrd.                              | mdb    |
 | _pb_ | 8    | Currently executing bank.                                  | mpb    |
 
-## IO
+## IO (nna8v2p only)
 
-| name | size | description | access |
-| ---- | ---- | ----------- | ------ |
-| _pf_ | 8    | Port flags  | 0xFF00 |
-| _p0_ | 8    | Port flags  | 0xFF01 |
-| _p1_ | 8    | Port flags  | 0xFF02 |
+| name | size | description      | access |
+| ---- | ---- | ---------------- | ------ |
+| _pf_ | 8    | Port flags       | 0xFF00 |
+| _p0_ | 8    | PS/2 Port 0 data | 0xFF01 |
+| _p1_ | 8    | PS/2 Port 1 data | 0xFF02 |
 
-## Video
+## Video (only nna8v2v)
 
 | name | size | description        | access |
 | ---- | ---- | ------------------ | ------ |
@@ -155,11 +159,9 @@ Move the calculate operation into the _co_ register
 | ?   | 11   | 10   |                                 |
 | ?   | 11   | 11   |                                 |
 
-# IO Ports
+# PS/2 port flags (only on nna8v2)
 
-There are two ps/2 IO ports available.
-
-### port flags
+The _pf_ register controls the two ps/2 ports
 
 | bit | function |
 | --- | -------- |

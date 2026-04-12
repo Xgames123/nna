@@ -1,6 +1,27 @@
 # nna8v3
 
-This document only lists the changes made relative to [nna8v2](./nna8v2.md)
+An 8 bit general purpose processor optimized for area and for tapeout at [tinytapeout](https://tinytapeout.com).
+
+# Memory
+
+Memory is divided into 256 banks with each 256 bytes of addressable memory for a total of 65K of addressable memory.
+The data bank select register (_db_) is used to select on which bank mwr and mrd instructions operate.
+
+All banks are executable. Switching the executing bank can be done using the mpb instruction.
+
+## Memory map
+
+| addr     | size     | function        |
+| -------- | -------- | --------------- |
+| ..0x1000 | (0x1000) | Flash (readony) |
+| ..       | (0xEF)   | RAM             |
+| 0xFF00   | (0xFF)   | IO bank         |
+
+> ![NOTE]
+> Ranges don't include the lower bound
+
+> ![NOTE] unmapped IO access
+> Writes to unmapped addresses on the IO bank wil write to void and reads will result in zero
 
 # Flags
 
@@ -8,6 +29,27 @@ This document only lists the changes made relative to [nna8v2](./nna8v2.md)
 | ---- | ------------------------------------------------------------------------------------- |
 | `cf` | Conditional flag. Set by `eq` and `gt` instructions and checked by `jrc` instructions |
 | `of` | Overflow flag. Set when the result of an operation overflows                          |
+
+# Registers
+
+Registers are identical to [nna8v2](./nna8v2.md).
+
+> [!NOTE]
+> All registers including pc are reset to 0 when the device boots up.
+
+> **access**
+> How the register can be accessed
+
+| name | size | description                                                | access |
+| ---- | ---- | ---------------------------------------------------------- | ------ |
+| _r0_ | 8    | General purpose, destination for lil and lih instructions. | mov    |
+| _r1_ | 8    | General purpose                                            | mov    |
+| _r2_ | 8    | General purpose                                            | mov    |
+| _r3_ | 8    | General purpose                                            | mov    |
+| _pc_ | 8    | Program counter                                            | -      |
+| _co_ | 4    | Calc operation, Used by cal instruction.                   | mco    |
+| _db_ | 8    | Current bank for mwr and mrd.                              | mdb    |
+| _pb_ | 8    | Currently executing bank.                                  | mpb    |
 
 # Instructions
 
@@ -78,6 +120,8 @@ Run the sub instruction {ins}
 ## mco {co} {co}
 
 Move the calculate operation into the _co_ register
+
+NOTE: the div and mod operations have been removed
 
 | op  | arg0 | arg1 | description         |
 | --- | ---- | ---- | ------------------- |
