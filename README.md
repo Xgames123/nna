@@ -14,13 +14,13 @@ My custom designed 8 bit general purpose architecture and processors.
 
 ## Assembler (nnaasm)
 
-Example programs are available in `hw/<nna_arch>/programs/bin` where `<nna_arch>` is `nna8v1`,`nna8v2`,`nna8v3`,...
+Example programs are available in `hw/<nna_arch>/programs/bin` where `<nna_arch>` is one of: `nna8v1`,`nna8v2`,`nna8v3`,...
 
-You can write your own programs using the [nnaasm assembler](https://github.com/Xgames123/nna/blob/main/spec/nnaasm.md).
+You can write your own programs using the [nnaasm](https://github.com/Xgames123/nna/blob/main/spec/nnaasm.md). assembler
 
 The assembler can be installed by running `./tools/install.sh`
 [Assembler docs](spec/nnaasm.md)
 
 ## Hardware
 
-- [tt_nna8v2](https://github.com/Xgames123/tt_nna8v2)
+- [tt_nna8v3](https://github.com/Xgames123/tt_nna8v3) nna8v3 chip on [tinytapeout](https://tinytapeout.com)
