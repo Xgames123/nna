@@ -30,21 +30,21 @@ All banks are executable. Switching the executing bank can be done using the mpb
 > ![NOTE]
 > Ranges don't include the lower bound
 
-> ![NOTE] unmapped IO access
-> Writes to unmapped addresses on the IO bank wil write to void and reads will result in zero
-
 > ![NOTE] nna8v2v
 > `nna8v2v` as high speed video memory is available at 0xFE00->0xFEFF instead of ram
 
 ## IO bank
 
-| addr | size   | function | variants    |
+| addr | size   | register | variants    |
 | ---- | ------ | -------- | ----------- |
-| 0x00 | (0x01) | _pf_     |             |
-| 0x01 | (0x01) | _p0_     |             |
-| 0x02 | (0x01) | _p1_     |             |
+| 0x00 | (0x01) | _pf_     | nna8v2**p** |
+| 0x01 | (0x01) | _p0_     | nna8v2**p** |
+| 0x02 | (0x01) | _p1_     | nna8v2**p** |
 | 0x03 | (0x01) | _vm_     | nna8v2**v** |
 | ..   | -      | unused   |             |
+
+> ![NOTE] unmapped IO access
+> Writes to unmapped addresses on the IO bank wil write to void and reads will result in zero
 
 # Flag
 
@@ -159,7 +159,7 @@ Move the calculate operation into the _co_ register
 | ?   | 11   | 10   |                                 |
 | ?   | 11   | 11   |                                 |
 
-# PS/2 port flags (only on nna8v2)
+# PS/2 port flags (only on nna8v2p)
 
 The _pf_ register controls the two ps/2 ports
 
