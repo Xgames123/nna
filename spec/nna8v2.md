@@ -21,14 +21,14 @@ All banks are executable. Switching the executing bank can be done using the mpb
 
 ## Memory map
 
-| addr     | size     | function         |
-| -------- | -------- | ---------------- |
-| ..0x1000 | (0x1000) | Flash (readonly) |
-| ..       | (0xEF)   | RAM              |
-| 0xFF00   | (0xFF)   | IO bank          |
+| addr           | size     | function         |
+| -------------- | -------- | ---------------- |
+| ..0x7FFF       | (0x8000) | Flash (readonly) |
+| 0x8000..0xFEFF | (0xEF)   | RAM              |
+| 0xFF00..0xFFFF | (0xFF)   | IO bank          |
 
 > ![NOTE]
-> Ranges don't include the lower bound
+> Ranges include both the upper and lower bound
 
 > ![NOTE] nna8v2v
 > `nna8v2v` as high speed video memory is available at 0xFE00->0xFEFF instead of ram

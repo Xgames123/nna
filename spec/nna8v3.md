@@ -20,15 +20,15 @@ All banks are executable. Switching the executing bank can be done using the mpb
 
 ## Memory map
 
-| addr     | size     | function        |
-| -------- | -------- | --------------- |
-| ..0x1000 | (0x1000) | Flash (readony) |
-| ?        | (0x8)    | Internal ram    |
-| ..       | (0xEF)   | RAM             |
-| 0xFF00   | (0xFF)   | IO bank         |
+| addr           | size     | function         |
+| -------------- | -------- | ---------------- |
+| ..0x7FFF       | (0x8000) | Flash (readonly) |
+| 0x8000..0x800F | (0x16)   | Internal RAM     |
+| 0x8010..0xFEFF | (0xEF)   | RAM              |
+| 0xFF00..0xFFFF | (0xFF)   | IO bank          |
 
-> [!NOTE]
-> Ranges don't include the lower bound
+> ![NOTE]
+> Ranges include both the upper and lower bound
 
 ## IO bank
 
@@ -42,10 +42,12 @@ All banks are executable. Switching the executing bank can be done using the mpb
 | 0x05 | (0x01) | _tx_     | nna8v3**u** |
 | 0x06 | (0x01) | _sd_     | nna8v3**s** |
 | ..   | -      | unmapped |             |
-| 0x10 | (0x01) | _pcr_    |             |
-| 0x11 | (0x01) | _co_     |             |
-| 0x12 | (0x01) | _db_     |             |
-| 0x13 | (0x01) | _pb_     |             |
+| 0x10 | (0x01) | _co_     |             |
+| 0x11 | (0x01) | _db_     |             |
+| 0x12 | (0x01) | _pb_     |             |
+| ..   | -      | unmapped |             |
+| 0x20 | (0x01) | _pcr_    |             |
+| 0x21 | (0x01) | _r0r_    |             |
 | ..   | -      | unmapped |             |
 
 See [IO section](#IO) for more information about IO registers
@@ -61,9 +63,20 @@ See [IO section](#IO) for more information about IO registers
 
 # Interrupts
 
-Interrupts are triggered by the `brk` instruction. When triggered the cpu will jump to address (TODO find address) and store the current value of _pc_ in the _pcr_ register at the end of flash memory _pb_ will also be shadowed to 0 when in an interrupt handler.
+An interrupt can be triggered by the `brk` instruction or by pulling the INT line low when hardware interrupts are enabled.
 
-When using `rfi` instruction the cpu will exit the interrupt handler and jump to the address in _pcr_.
+The interrupt handler is responsible for restoring the state of the processor to before the interrupt when exiting the handler. (Apart from the _r0_ register)
+
+When an interrupt is triggered the followed will happen in order.
+
+1. The value of _pc_ and _r0_ will be saved in _pcr_ and _r0r_ respectively
+2. The processor will jump to address 0x7F00
+3. The processor will enter interrupt mode. While in interrupt mode _pb_ will be shadowed to 0.
+
+When an `rfi` instruction is encountered the processor will return from the interrupt.
+
+1. Interrupt mode is exited.
+2. _pc_ and _r0_ are set to _pcr_ and _r0r_ respectively. This causes a jump to the original address where the interrupt had been fired.
 
 # Registers
 
@@ -92,28 +105,28 @@ Registers are identical to [nna8v2](./nna8v2.md).
 | ---- | ---- | ------------------------------- | ------ | ----------- |
 | _pf_ | 8    | Peripheral flags                | 0xFF00 |             |
 | _ps_ | 8    | Peripheral status               | 0xFF01 |             |
-| _gi_ | 8    | General purpose input pins[^1]  | 0xFF02 |             |
+| _gi_ | 8    | General purpose input pins      | 0xFF02 |             |
 | _go_ | 8    | General purpose output pins[^1] | 0xFF03 |             |
 | _rx_ | 8    | UART RX register                | 0xFF04 | nna8v3**u** |
 | _tx_ | 8    | UART TX register                | 0xFF05 | nna8v3**u** |
 | _sd_ | 8    | SPI data register               | 0xFF06 | nna8v3**s** |
 
-[^1]: GPI 6,7 and GPI 5,6,7 are disabled when UART and SPI are enabled.
+[^1]: When a peripheral is enabled that uses any of the GPO pins writes to the respective pins will be disabled.
 
 ### Peripheral flags
 
 The Peripheral flags register (_pf_) holds which peripherals are enabled
 
-| bit | function    |
-| --- | ----------- |
-| 1   | UART enable |
-| 2   | SPI enable  |
-| 3   | unused      |
-| 4   | unused      |
-| 5   | unused      |
-| 6   | unused      |
-| 7   | unused      |
-| 8   | unused      |
+| bit | function                  |
+| --- | ------------------------- |
+| 1   | UART enable               |
+| 2   | SPI enable                |
+| 3   | hardware interrupt enable |
+| 4   | unused                    |
+| 5   | unused                    |
+| 6   | unused                    |
+| 7   | unused                    |
+| 8   | unused                    |
 
 ### Peripheral status
 
