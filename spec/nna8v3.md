@@ -4,12 +4,12 @@ An 8 bit general purpose processor optimized for area and for tapeout at [tinyta
 
 # Variants
 
-Variants differ in the peripherals available. Multiple variant tags can be combined. For example nna8v2vp has a video buffer and two memory mapped PS/2 ports
+Variants differ in the peripherals available. Multiple variant tags can be combined. For example nna8v3**us** has both the SPI and UART peripherals.
 
 | variant     | description                            |
 | ----------- | -------------------------------------- |
-| nna8v2**s** | Has a memory mapped SPI port available |
-| nna8v2**u** | Has a memory mapped UART available     |
+| nna8v3**s** | Has a memory mapped SPI port available |
+| nna8v3**u** | Has a memory mapped UART available     |
 
 # Memory
 
