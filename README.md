@@ -23,4 +23,4 @@ The assembler can be installed by running `./tools/install.sh`
 
 ## Hardware
 
-- [tinynna](https://github.com/Xgames123/tinynna) [tinytapeout](https://tinytapeout.com) version of the nna8v3 chip
+- [tinynna](https://github.com/Xgames123/tt_tinynna) [tinytapeout](https://tinytapeout.com) version of the nna8v3 chip
