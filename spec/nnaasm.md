@@ -16,7 +16,7 @@ An overview of the nnaasm assembly language. [Information about the architecture
 
 Assembler directives are instructions for the assembler. You can recognize them with the leading dot.
 
-### `.arch`
+### `.arch "<arch>"`
 
 Sets the target architecture to assemble for. When not set you can use the `-a` option on the command line.
 
@@ -33,7 +33,7 @@ mov r2 r1 ; this at A1
 
 ```
 
-### `.include_bytes`
+### `.include_bytes "<file>"`
 
 Includes the specified file as bytes.
 
@@ -41,9 +41,9 @@ Includes the specified file as bytes.
 .include_bytes "test.bin"
 ```
 
-### `.reachable`
+### `.reachable <address>`
 
-Throws an error when the branch instruction can not jump to specified address.
+Throws an error when a branch instruction can not jump from the location of the directive to the specified address.
 
 (useful mostly for nna8v2 and nna8v3)
 
@@ -59,7 +59,7 @@ bra 0x0 .reachable &start_of_code
 
 ```
 
-### `.bank`
+### `.bank <bank>`
 
 Same as .org but for banks.
 
